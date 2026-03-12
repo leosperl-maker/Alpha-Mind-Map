@@ -107,12 +107,15 @@ export interface MapState {
   past: HistoryEntry[];
   future: HistoryEntry[];
 
-  createMap: (title?: string) => string;
+  createMap: (title?: string, workspaceId?: string) => string;
   deleteMap: (id: string) => void;
   duplicateMap: (id: string) => string;
   setActiveMap: (id: string) => void;
   renameMap: (id: string, title: string) => void;
   toggleStarMap: (id: string) => void;
+  trashMap: (id: string) => void;
+  restoreMap: (id: string) => void;
+  moveMapToWorkspace: (id: string, workspaceId: string) => void;
   updateSettings: (settings: Partial<MapSettings>) => void;
   importMap: (json: string) => string | null;
 
@@ -158,8 +161,8 @@ export const useMapStore = create<MapState>((set, get) => ({
     saveToStorage(maps, activeMapId);
   },
 
-  createMap: (title) => {
-    const map = createNewMap(title);
+  createMap: (title, workspaceId) => {
+    const map = { ...createNewMap(title), workspaceId: workspaceId ?? 'personal' };
     set(s => ({ maps: [...s.maps, map], activeMapId: map.id }));
     get().recomputeLayout();
     get().save();
@@ -204,6 +207,27 @@ export const useMapStore = create<MapState>((set, get) => ({
   toggleStarMap: (id) => {
     set(s => ({
       maps: s.maps.map(m => m.id === id ? { ...m, isStarred: !m.isStarred } : m),
+    }));
+    get().save();
+  },
+
+  trashMap: (id) => {
+    set(s => ({
+      maps: s.maps.map(m => m.id === id ? { ...m, isTrashed: true, trashedAt: new Date().toISOString() } : m),
+    }));
+    get().save();
+  },
+
+  restoreMap: (id) => {
+    set(s => ({
+      maps: s.maps.map(m => m.id === id ? { ...m, isTrashed: false, trashedAt: undefined } : m),
+    }));
+    get().save();
+  },
+
+  moveMapToWorkspace: (id, workspaceId) => {
+    set(s => ({
+      maps: s.maps.map(m => m.id === id ? { ...m, workspaceId } : m),
     }));
     get().save();
   },

@@ -1,29 +1,37 @@
 import { useEffect } from 'react';
-import { useUIStore } from './store/uiStore';
-import { useMapStore } from './store/mapStore';
-import { TopToolbar } from './components/Toolbar/TopToolbar';
-import { NodeToolbar } from './components/Toolbar/NodeToolbar';
-import { ConnectorToolbar } from './components/Toolbar/ConnectorToolbar';
-import { MindMapCanvas } from './components/Canvas/MindMapCanvas';
-import { PersonalizePanel } from './components/Panels/PersonalizePanel';
-import { NotesPanel } from './components/Panels/NotesPanel';
-import { ExportPanel } from './components/Panels/ExportPanel';
-import { SharePanel } from './components/Panels/SharePanel';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './auth/AuthContext';
+import { ProtectedRoute } from './components/Auth/ProtectedRoute';
+import { LoginPage } from './pages/LoginPage';
+import { SignupPage } from './pages/SignupPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { DashboardPage } from './components/Dashboard/DashboardPage';
-import { ContextMenu } from './components/common/ContextMenu';
-import { SearchBar } from './components/common/SearchBar';
+import { MapEditorPage } from './pages/MapEditorPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { useMapStore } from './store/mapStore';
+import { useWorkspaceStore } from './store/workspaceStore';
+import { useUIStore } from './store/uiStore';
 
-function App() {
-  const view = useUIStore(s => s.view);
-  const createMap = useMapStore(s => s.createMap);
+// ── Bootstrap: seed demo map on first load + init workspace ──────────────────
+function AppBootstrap() {
+  const { user } = useAuth();
   const maps = useMapStore(s => s.maps);
+  const createMap = useMapStore(s => s.createMap);
+  const addNode = useMapStore(s => s.addNode);
 
-  // Create a demo map on first load
+  const recomputeLayout = useMapStore(s => s.recomputeLayout);
+  const initForUser = useWorkspaceStore(s => s.initForUser);
+
   useEffect(() => {
+    // Init default workspace for current user
+    const ownerId = user?.id ?? 'local';
+    initForUser(ownerId);
+
+    // Seed demo map if no maps exist yet
     if (maps.length === 0) {
-      const id = createMap('My First Mind Map');
+      const id = createMap('Ma première Mind Map', 'personal');
       setTimeout(() => {
-        const { addNode, maps: currentMaps } = useMapStore.getState();
+        const { maps: currentMaps } = useMapStore.getState();
         const map = currentMaps.find(m => m.id === id);
         if (!map) return;
         const n1 = addNode(map.rootNodeId);
@@ -32,28 +40,26 @@ function App() {
         const n4 = addNode(map.rootNodeId);
 
         setTimeout(() => {
-          const { maps: m2, addNode: add2, updateNodeText } = useMapStore.getState();
+          const { maps: m2, addNode: add2, updateNodeText: ut } = useMapStore.getState();
           const liveMap = m2.find(m => m.id === id);
           if (!liveMap) return;
-
           const nodeIds = [n1, n2, n3, n4];
-          const labels = ['Ideas', 'Tasks', 'Goals', 'Notes'];
+          const labels = ['Idées', 'Tâches', 'Objectifs', 'Notes'];
+          const subLabels: Record<string, string[]> = {
+            'Idées': ['Brainstorm', 'Recherche'],
+            'Tâches': ['En cours', 'À faire'],
+            'Objectifs': ['Court terme', 'Long terme'],
+            'Notes': ['Ressources', 'Références'],
+          };
           nodeIds.forEach((nid, i) => {
-            updateNodeText(nid, labels[i]);
-            const child1 = add2(nid);
-            const child2 = add2(nid);
+            ut(nid, labels[i]);
+            const c1 = add2(nid); const c2 = add2(nid);
             const { updateNodeText: ut2 } = useMapStore.getState();
-            const subLabels: Record<string, string[]> = {
-              'Ideas': ['Brainstorm', 'Research'],
-              'Tasks': ['In Progress', 'Backlog'],
-              'Goals': ['Short term', 'Long term'],
-              'Notes': ['Resources', 'References'],
-            };
-            ut2(child1, subLabels[labels[i]][0]);
-            ut2(child2, subLabels[labels[i]][1]);
+            ut2(c1, subLabels[labels[i]][0]);
+            ut2(c2, subLabels[labels[i]][1]);
           });
 
-          useMapStore.getState().recomputeLayout();
+          recomputeLayout();
           const { fitToScreen } = useUIStore.getState();
           const finalMap = useMapStore.getState().maps.find(m => m.id === id);
           if (!finalMap) return;
@@ -70,23 +76,56 @@ function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (view === 'dashboard') {
-    return <DashboardPage />;
-  }
+  return null;
+}
 
+// ── Root redirect: → /dashboard if logged in, else → /login ─────────────────
+function RootRedirect() {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  return <Navigate to={user ? '/dashboard' : '/login'} replace />;
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+function App() {
   return (
-    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative' }}>
-      <TopToolbar />
-      <NodeToolbar />
-      <ConnectorToolbar />
-      <MindMapCanvas />
-      <PersonalizePanel />
-      <NotesPanel />
-      <ExportPanel />
-      <SharePanel />
-      <ContextMenu />
-      <SearchBar />
-    </div>
+    <BrowserRouter basename="/Alpha-Mind-Map">
+      <AuthProvider>
+        <AppBootstrap />
+        <Routes>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/map/:id"
+            element={
+              <ProtectedRoute>
+                <MapEditorPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

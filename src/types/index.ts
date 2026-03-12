@@ -81,9 +81,12 @@ export interface MindMap {
   id: string;
   title: string;
   ownerId: string;
+  workspaceId?: string;
   createdAt: string;
   updatedAt: string;
   isStarred: boolean;
+  isTrashed?: boolean;
+  trashedAt?: string;
   tags: string[];
   settings: MapSettings;
   rootNodeId: string;
