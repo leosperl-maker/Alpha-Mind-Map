@@ -3,6 +3,8 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { useMapStore } from '../../store/mapStore';
 import { useUIStore } from '../../store/uiStore';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { BottomSheet } from '../common/BottomSheet';
 
 export const SharePanel: React.FC = () => {
   const activePanel = useUIStore(s => s.activePanel);
@@ -14,12 +16,12 @@ export const SharePanel: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
   const [pdfStatus, setPdfStatus] = useState<'idle' | 'generating' | 'done'>('idle');
+  const { isMobile } = useBreakpoint();
 
   if (activePanel !== 'share') return null;
 
   const map = maps.find(m => m.id === activeMapId);
 
-  // ── Copy link ─────────────────────────────────────────────────────────────
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href).then(() => {
       setCopied(true);
@@ -27,7 +29,6 @@ export const SharePanel: React.FC = () => {
     });
   };
 
-  // ── Export .amm ────────────────────────────────────────────────────────────
   const handleExportAMM = () => {
     if (!map) return;
     const payload = {
@@ -46,7 +47,6 @@ export const SharePanel: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  // ── Import .amm ────────────────────────────────────────────────────────────
   const handleImportAMM = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -55,7 +55,6 @@ export const SharePanel: React.FC = () => {
       try {
         const text = ev.target?.result as string;
         const parsed = JSON.parse(text);
-        // Support both raw map JSON and .amm wrapper
         const mapData = parsed.format === 'alpha-mind-map' ? JSON.stringify(parsed.map) : text;
         const newId = importMap(mapData);
         if (newId) {
@@ -72,7 +71,6 @@ export const SharePanel: React.FC = () => {
     e.target.value = '';
   };
 
-  // ── Export PDF via html2canvas + jspdf ────────────────────────────────────
   const handleExportPDF = async () => {
     const canvasEl = document.querySelector('.canvas-transform') as HTMLElement | null;
     if (!canvasEl) { alert('No canvas found.'); return; }
@@ -100,6 +98,89 @@ export const SharePanel: React.FC = () => {
     }
   };
 
+  const panelContent = (
+    <div style={{ padding: 20, overflow: 'auto' }}>
+      {/* Copy link */}
+      <Section title="Share">
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <input
+            readOnly
+            value={window.location.href}
+            style={{
+              flex: 1, border: '1px solid #DFE6E9', borderRadius: 6,
+              padding: '7px 10px', fontSize: 12, color: '#636E72',
+              background: '#F8F9FA', outline: 'none',
+            }}
+          />
+          <button
+            onClick={handleCopyLink}
+            style={{
+              padding: '7px 14px', background: copied ? '#00B894' : '#7C5CE7',
+              color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer',
+              fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', transition: 'background 200ms',
+              minHeight: 44,
+            }}
+          >{copied ? '✓ Copied' : 'Copy'}</button>
+        </div>
+        <p style={{ fontSize: 11, color: '#636E72', margin: 0, lineHeight: 1.5 }}>
+          Anyone with the link can view this page. Collaboration features coming soon.
+        </p>
+      </Section>
+
+      {/* .amm format */}
+      <Section title="Alpha Mind Map file (.amm)">
+        <ShareBtn
+          icon="⬇"
+          label="Download .amm file"
+          desc="Native format — re-importable, preserves all data"
+          onClick={handleExportAMM}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".amm,.json"
+          onChange={handleImportAMM}
+          style={{ display: 'none' }}
+        />
+        <ShareBtn
+          icon="⬆"
+          label="Import .amm file"
+          desc="Open a previously saved .amm or .json map"
+          onClick={() => fileInputRef.current?.click()}
+        />
+      </Section>
+
+      {/* PDF */}
+      <Section title="Export PDF">
+        <ShareBtn
+          icon={pdfStatus === 'generating' ? '⟳' : pdfStatus === 'done' ? '✓' : '⬇'}
+          label={pdfStatus === 'generating' ? 'Generating…' : pdfStatus === 'done' ? 'PDF saved!' : 'Download PDF'}
+          desc="High-quality snapshot of the current map view"
+          onClick={handleExportPDF}
+          disabled={pdfStatus === 'generating'}
+        />
+        <ShareBtn
+          icon="🖨"
+          label="Print / Save PDF"
+          desc="Use browser print dialog (Ctrl+P) for more options"
+          onClick={() => window.print()}
+        />
+      </Section>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <BottomSheet
+        open={activePanel === 'share'}
+        onClose={() => setActivePanel(null)}
+        title="Share & Export"
+      >
+        {panelContent}
+      </BottomSheet>
+    );
+  }
+
   return (
     <div
       className="panel-enter"
@@ -112,78 +193,10 @@ export const SharePanel: React.FC = () => {
     >
       <div style={{ padding: '16px 20px', borderBottom: '1px solid #DFE6E9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontWeight: 600, fontSize: 15, color: '#2D3436' }}>Share & Export</span>
-        <button onClick={() => setActivePanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#636E72' }}>×</button>
+        <button onClick={() => setActivePanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#636E72', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
       </div>
 
-      <div style={{ padding: 20, flex: 1, overflow: 'auto' }}>
-
-        {/* Copy link */}
-        <Section title="Share">
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <input
-              readOnly
-              value={window.location.href}
-              style={{
-                flex: 1, border: '1px solid #DFE6E9', borderRadius: 6,
-                padding: '7px 10px', fontSize: 12, color: '#636E72',
-                background: '#F8F9FA', outline: 'none',
-              }}
-            />
-            <button
-              onClick={handleCopyLink}
-              style={{
-                padding: '7px 14px', background: copied ? '#00B894' : '#7C5CE7',
-                color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer',
-                fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', transition: 'background 200ms',
-              }}
-            >{copied ? '✓ Copied' : 'Copy'}</button>
-          </div>
-          <p style={{ fontSize: 11, color: '#636E72', margin: 0, lineHeight: 1.5 }}>
-            Anyone with the link can view this page. Collaboration features coming soon.
-          </p>
-        </Section>
-
-        {/* .amm format */}
-        <Section title="Alpha Mind Map file (.amm)">
-          <ShareBtn
-            icon="⬇"
-            label="Download .amm file"
-            desc="Native format — re-importable, preserves all data"
-            onClick={handleExportAMM}
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".amm,.json"
-            onChange={handleImportAMM}
-            style={{ display: 'none' }}
-          />
-          <ShareBtn
-            icon="⬆"
-            label="Import .amm file"
-            desc="Open a previously saved .amm or .json map"
-            onClick={() => fileInputRef.current?.click()}
-          />
-        </Section>
-
-        {/* PDF */}
-        <Section title="Export PDF">
-          <ShareBtn
-            icon={pdfStatus === 'generating' ? '⟳' : pdfStatus === 'done' ? '✓' : '⬇'}
-            label={pdfStatus === 'generating' ? 'Generating…' : pdfStatus === 'done' ? 'PDF saved!' : 'Download PDF'}
-            desc="High-quality snapshot of the current map view"
-            onClick={handleExportPDF}
-            disabled={pdfStatus === 'generating'}
-          />
-          <ShareBtn
-            icon="🖨"
-            label="Print / Save PDF"
-            desc="Use browser print dialog (Ctrl+P) for more options"
-            onClick={() => window.print()}
-          />
-        </Section>
-
-      </div>
+      {panelContent}
     </div>
   );
 };
@@ -206,6 +219,7 @@ const ShareBtn: React.FC<{ icon: string; label: string; desc: string; onClick: (
       background: disabled ? '#F0F0F0' : '#F8F9FA', border: '1px solid #DFE6E9', borderRadius: 8,
       cursor: disabled ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 12,
       textAlign: 'left', transition: 'background 120ms', opacity: disabled ? 0.6 : 1,
+      minHeight: 44,
     }}
     onMouseEnter={e => { if (!disabled) { e.currentTarget.style.background = '#F0EDFF'; e.currentTarget.style.borderColor = '#7C5CE7'; } }}
     onMouseLeave={e => { if (!disabled) { e.currentTarget.style.background = '#F8F9FA'; e.currentTarget.style.borderColor = '#DFE6E9'; } }}

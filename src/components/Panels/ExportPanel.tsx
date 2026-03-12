@@ -2,6 +2,8 @@ import React, { useRef } from 'react';
 import { useMapStore } from '../../store/mapStore';
 import { useUIStore } from '../../store/uiStore';
 import type { MindMapNode } from '../../types';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { BottomSheet } from '../common/BottomSheet';
 
 export const ExportPanel: React.FC = () => {
   const activePanel = useUIStore(s => s.activePanel);
@@ -11,6 +13,7 @@ export const ExportPanel: React.FC = () => {
   const importMap = useMapStore(s => s.importMap);
   const setActiveMap = useMapStore(s => s.setActiveMap);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { isMobile } = useBreakpoint();
 
   if (activePanel !== 'export') return null;
 
@@ -79,6 +82,61 @@ export const ExportPanel: React.FC = () => {
     e.target.value = '';
   }
 
+  const panelContent = (
+    <div style={{ padding: 20, overflow: 'auto' }}>
+      <Section title="Export">
+        <ExportBtn icon="{ }" label="Export JSON" desc="Full map data, re-importable" onClick={exportJSON} />
+        <ExportBtn icon="# " label="Export Markdown" desc="Nested bullet list" onClick={exportMarkdown} />
+        <ExportBtn icon="⬡" label="Export SVG" desc="Vector graphic of current view" onClick={exportSVG} />
+        <ExportBtn
+          icon="🖨"
+          label="Print / Save PDF"
+          desc="Use browser print to save as PDF"
+          onClick={() => window.print()}
+        />
+      </Section>
+
+      <Section title="Import">
+        <p style={{ fontSize: 13, color: '#636E72', marginBottom: 12, lineHeight: 1.5 }}>
+          Import a previously exported JSON file to open it as a new map.
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          onChange={handleImportJSON}
+          style={{ display: 'none' }}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            width: '100%', padding: '10px 16px', background: '#F8F9FA',
+            border: '2px dashed #DFE6E9', borderRadius: 8, cursor: 'pointer',
+            fontSize: 13, color: '#2D3436', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', gap: 8, transition: 'border-color 150ms',
+            minHeight: 44,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = '#6C5CE7'; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = '#DFE6E9'; }}
+        >
+          ↑ Choose JSON file…
+        </button>
+      </Section>
+    </div>
+  );
+
+  if (isMobile) {
+    return (
+      <BottomSheet
+        open={activePanel === 'export'}
+        onClose={() => setActivePanel(null)}
+        title="Export / Import"
+      >
+        {panelContent}
+      </BottomSheet>
+    );
+  }
+
   return (
     <div
       className="panel-enter"
@@ -91,48 +149,10 @@ export const ExportPanel: React.FC = () => {
     >
       <div style={{ padding: '16px 20px', borderBottom: '1px solid #DFE6E9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontWeight: 600, fontSize: 15, color: '#2D3436' }}>Export / Import</span>
-        <button onClick={() => setActivePanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#636E72' }}>×</button>
+        <button onClick={() => setActivePanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#636E72', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
       </div>
 
-      <div style={{ padding: 20, flex: 1, overflow: 'auto' }}>
-        <Section title="Export">
-          <ExportBtn icon="{ }" label="Export JSON" desc="Full map data, re-importable" onClick={exportJSON} />
-          <ExportBtn icon="# " label="Export Markdown" desc="Nested bullet list" onClick={exportMarkdown} />
-          <ExportBtn icon="⬡" label="Export SVG" desc="Vector graphic of current view" onClick={exportSVG} />
-          <ExportBtn
-            icon="🖨"
-            label="Print / Save PDF"
-            desc="Use browser print to save as PDF"
-            onClick={() => window.print()}
-          />
-        </Section>
-
-        <Section title="Import">
-          <p style={{ fontSize: 13, color: '#636E72', marginBottom: 12, lineHeight: 1.5 }}>
-            Import a previously exported JSON file to open it as a new map.
-          </p>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            onChange={handleImportJSON}
-            style={{ display: 'none' }}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            style={{
-              width: '100%', padding: '10px 16px', background: '#F8F9FA',
-              border: '2px dashed #DFE6E9', borderRadius: 8, cursor: 'pointer',
-              fontSize: 13, color: '#2D3436', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', gap: 8, transition: 'border-color 150ms',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#6C5CE7'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = '#DFE6E9'; }}
-          >
-            ↑ Choose JSON file…
-          </button>
-        </Section>
-      </div>
+      {panelContent}
     </div>
   );
 };
@@ -153,7 +173,7 @@ const ExportBtn: React.FC<{ icon: string; label: string; desc: string; onClick: 
       width: '100%', padding: '10px 14px', marginBottom: 8,
       background: '#F8F9FA', border: '1px solid #DFE6E9', borderRadius: 8,
       cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12,
-      textAlign: 'left', transition: 'background 120ms',
+      textAlign: 'left', transition: 'background 120ms', minHeight: 44,
     }}
     onMouseEnter={e => { e.currentTarget.style.background = '#F0EDFF'; e.currentTarget.style.borderColor = '#6C5CE7'; }}
     onMouseLeave={e => { e.currentTarget.style.background = '#F8F9FA'; e.currentTarget.style.borderColor = '#DFE6E9'; }}

@@ -3,6 +3,7 @@ import { useMapStore } from '../../store/mapStore';
 import { useUIStore } from '../../store/uiStore';
 import type { ConnectorStyle, ConnectorWidth } from '../../types';
 import { NODE_PALETTE, ALPHA_COLORS } from '../../utils/colors';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 export const ConnectorToolbar: React.FC = () => {
   const selectedConnectorId = useUIStore(s => s.selectedConnectorId);
@@ -10,6 +11,7 @@ export const ConnectorToolbar: React.FC = () => {
   const maps = useMapStore(s => s.maps);
   const activeMapId = useMapStore(s => s.activeMapId);
   const updateNodeStyle = useMapStore(s => s.updateNodeStyle);
+  const { isMobile } = useBreakpoint();
 
   const [showColorPicker, setShowColorPicker] = useState(false);
 
@@ -39,27 +41,9 @@ export const ConnectorToolbar: React.FC = () => {
     { key: 'thick', label: 'L' },
   ];
 
-  return (
-    <div
-      className="panel-enter"
-      style={{
-        position: 'fixed',
-        top: 68,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        background: '#fff',
-        border: '1px solid #DFE6E9',
-        borderRadius: 10,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '6px 10px',
-        gap: 6,
-        zIndex: 40,
-      }}
-      onClick={e => e.stopPropagation()}
-    >
-      <span style={{ fontSize: 11, color: '#636E72', marginRight: 4 }}>Connector</span>
+  const toolbarContent = (
+    <>
+      {!isMobile && <span style={{ fontSize: 11, color: '#636E72', marginRight: 4 }}>Connector</span>}
       <Divider />
 
       {/* Connector style */}
@@ -71,7 +55,8 @@ export const ConnectorToolbar: React.FC = () => {
             ...toolBtnStyle,
             background: style.connectorStyle === c.key ? ALPHA_COLORS.primary : 'transparent',
             color: style.connectorStyle === c.key ? '#fff' : '#636E72',
-            fontSize: 12, padding: '2px 6px', borderRadius: 4,
+            fontSize: 12, padding: isMobile ? '8px' : '2px 6px', borderRadius: 4,
+            minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined,
           }}
           title={c.key}
         >{c.label}</button>
@@ -88,8 +73,9 @@ export const ConnectorToolbar: React.FC = () => {
             ...toolBtnStyle,
             background: style.connectorWidth === w.key ? ALPHA_COLORS.primary : 'transparent',
             color: style.connectorWidth === w.key ? '#fff' : '#636E72',
-            fontSize: 12, padding: '2px 6px', borderRadius: 4,
+            fontSize: 12, padding: isMobile ? '8px' : '2px 6px', borderRadius: 4,
             fontWeight: w.key === 'thick' ? 700 : 400,
+            minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined,
           }}
           title={`Width: ${w.key}`}
         >{w.label}</button>
@@ -103,16 +89,19 @@ export const ConnectorToolbar: React.FC = () => {
           onClick={() => setShowColorPicker(!showColorPicker)}
           style={{
             ...toolBtnStyle,
-            width: 24, height: 24, borderRadius: 4,
+            width: isMobile ? 36 : 24, height: isMobile ? 36 : 24, borderRadius: 4,
             background: style.connectorColor || '#DFE6E9',
             border: `2px solid ${style.connectorColor || '#DFE6E9'}`,
+            minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined,
           }}
           title="Connector color"
         />
         {showColorPicker && (
           <div
             style={{
-              position: 'absolute', top: '110%', left: 0,
+              position: 'absolute',
+              ...(isMobile ? { bottom: '110%' } : { top: '110%' }),
+              left: 0,
               background: '#fff', border: '1px solid #DFE6E9',
               borderRadius: 8, padding: 8,
               boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
@@ -141,9 +130,63 @@ export const ConnectorToolbar: React.FC = () => {
 
       <button
         onClick={() => setSelectedConnector(null)}
-        style={{ ...toolBtnStyle, color: '#636E72', fontSize: 16, padding: '2px 6px', borderRadius: 4 }}
+        style={{
+          ...toolBtnStyle, color: '#636E72', fontSize: 16, padding: isMobile ? '8px 12px' : '2px 6px',
+          borderRadius: 4, minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined,
+        }}
         title="Deselect connector"
       >×</button>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <div
+        className="panel-enter"
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: '#fff',
+          borderTop: '1px solid #DFE6E9',
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.12)',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '6px 8px',
+          gap: 4,
+          zIndex: 40,
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
+        } as React.CSSProperties}
+        onClick={e => e.stopPropagation()}
+      >
+        {toolbarContent}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="panel-enter"
+      style={{
+        position: 'fixed',
+        top: 68,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: '#fff',
+        border: '1px solid #DFE6E9',
+        borderRadius: 10,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '6px 10px',
+        gap: 6,
+        zIndex: 40,
+      }}
+      onClick={e => e.stopPropagation()}
+    >
+      {toolbarContent}
     </div>
   );
 };

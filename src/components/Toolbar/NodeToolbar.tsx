@@ -3,6 +3,7 @@ import { useMapStore } from '../../store/mapStore';
 import { useUIStore } from '../../store/uiStore';
 import type { NodeStyle, FontSize, NodeShape, ConnectorStyle } from '../../types';
 import { NODE_PALETTE, ALPHA_COLORS } from '../../utils/colors';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 export const NodeToolbar: React.FC = () => {
   const selectedNodeId = useUIStore(s => s.selectedNodeId);
@@ -13,6 +14,7 @@ export const NodeToolbar: React.FC = () => {
   const deleteNode = useMapStore(s => s.deleteNode);
   const colorBranch = useMapStore(s => s.colorBranch);
   const { setSelectedNode } = useUIStore();
+  const { isMobile } = useBreakpoint();
 
   const [showColorPicker, setShowColorPicker] = useState<'fill' | 'border' | 'text' | 'branch' | null>(null);
 
@@ -43,6 +45,219 @@ export const NodeToolbar: React.FC = () => {
     { key: 'dotted', label: '···' },
   ];
 
+  const toolbarContent = (
+    <>
+      {/* Fill color */}
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => setShowColorPicker(showColorPicker === 'fill' ? null : 'fill')}
+          style={{
+            ...toolBtnStyle,
+            background: style.fillColor || '#F8F9FA',
+            border: `2px solid ${style.fillColor || '#DFE6E9'}`,
+            width: isMobile ? 36 : 24, height: isMobile ? 36 : 24, borderRadius: 4,
+          }}
+          title="Fill color"
+          aria-label="Fill color"
+        />
+        {showColorPicker === 'fill' && (
+          <ColorPicker
+            onSelect={c => { set({ fillColor: c, textColor: '#fff' }); setShowColorPicker(null); }}
+            onClear={() => { set({ fillColor: null, textColor: null }); setShowColorPicker(null); }}
+            onClose={() => setShowColorPicker(null)}
+            above={isMobile}
+          />
+        )}
+      </div>
+
+      {/* Border color */}
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => setShowColorPicker(showColorPicker === 'border' ? null : 'border')}
+          style={{
+            ...toolBtnStyle,
+            background: '#fff',
+            border: `3px solid ${style.borderColor || '#DFE6E9'}`,
+            width: isMobile ? 36 : 24, height: isMobile ? 36 : 24, borderRadius: 4,
+          }}
+          title="Border color"
+          aria-label="Border color"
+        />
+        {showColorPicker === 'border' && (
+          <ColorPicker
+            onSelect={c => { set({ borderColor: c }); setShowColorPicker(null); }}
+            onClear={() => { set({ borderColor: null }); setShowColorPicker(null); }}
+            onClose={() => setShowColorPicker(null)}
+            above={isMobile}
+          />
+        )}
+      </div>
+
+      {/* Text color */}
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => setShowColorPicker(showColorPicker === 'text' ? null : 'text')}
+          style={{
+            ...toolBtnStyle,
+            background: 'none',
+            border: `2px solid ${style.textColor || '#DFE6E9'}`,
+            width: isMobile ? 36 : 24, height: isMobile ? 36 : 24, borderRadius: 4,
+            fontSize: 12, fontWeight: 700,
+            color: style.textColor || '#2D3436',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          title="Text color"
+          aria-label="Text color"
+        >T</button>
+        {showColorPicker === 'text' && (
+          <ColorPicker
+            onSelect={c => { set({ textColor: c }); setShowColorPicker(null); }}
+            onClear={() => { set({ textColor: null }); setShowColorPicker(null); }}
+            onClose={() => setShowColorPicker(null)}
+            above={isMobile}
+          />
+        )}
+      </div>
+
+      <Divider />
+
+      {/* Shape */}
+      {shapes.map(s => (
+        <button
+          key={s.key}
+          onClick={() => set({ shape: s.key })}
+          style={{
+            ...toolBtnStyle,
+            background: style.shape === s.key ? ALPHA_COLORS.primary : 'transparent',
+            color: style.shape === s.key ? '#fff' : '#636E72',
+            fontSize: 13, padding: isMobile ? '8px' : '3px 8px', borderRadius: 4,
+            minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined,
+          }}
+          title={s.key}
+        >{s.label}</button>
+      ))}
+
+      <Divider />
+
+      {/* Font size */}
+      {fontSizes.map(fs => (
+        <button
+          key={fs}
+          onClick={() => set({ fontSize: fs })}
+          style={{
+            ...toolBtnStyle,
+            background: style.fontSize === fs ? ALPHA_COLORS.primary : 'transparent',
+            color: style.fontSize === fs ? '#fff' : '#636E72',
+            fontSize: fs === 'xs' ? 9 : fs === 's' ? 11 : fs === 'm' ? 13 : fs === 'l' ? 15 : 18,
+            padding: isMobile ? '8px' : '2px 5px', borderRadius: 4,
+            minWidth: isMobile ? 44 : 22, minHeight: isMobile ? 44 : undefined,
+          }}
+          title={`Font size: ${fs.toUpperCase()}`}
+        >A</button>
+      ))}
+
+      {/* Bold */}
+      <button
+        onClick={() => set({ fontWeight: style.fontWeight === 'bold' ? 'normal' : 'bold' })}
+        style={{
+          ...toolBtnStyle,
+          background: style.fontWeight === 'bold' ? ALPHA_COLORS.primary : 'transparent',
+          color: style.fontWeight === 'bold' ? '#fff' : '#636E72',
+          fontWeight: 700, padding: isMobile ? '8px 12px' : '2px 8px', borderRadius: 4,
+          minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined,
+        }}
+        title="Bold"
+      >B</button>
+
+      <Divider />
+
+      {/* Connector style */}
+      {connectors.map(c => (
+        <button
+          key={c.key}
+          onClick={() => set({ connectorStyle: c.key })}
+          style={{
+            ...toolBtnStyle,
+            background: style.connectorStyle === c.key ? ALPHA_COLORS.primary : 'transparent',
+            color: style.connectorStyle === c.key ? '#fff' : '#636E72',
+            fontSize: 12, padding: isMobile ? '8px' : '2px 6px', borderRadius: 4,
+            minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined,
+          }}
+          title={c.key}
+        >{c.label}</button>
+      ))}
+
+      <Divider />
+
+      {/* Color branch */}
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => setShowColorPicker(showColorPicker === 'branch' ? null : 'branch')}
+          style={{
+            ...toolBtnStyle,
+            background: 'transparent',
+            color: '#636E72',
+            fontSize: 14, padding: isMobile ? '8px' : '2px 6px', borderRadius: 4,
+            border: '1px solid #DFE6E9',
+            minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined,
+          }}
+          title="Color branch"
+        >🎨</button>
+        {showColorPicker === 'branch' && (
+          <BranchColorPicker
+            onSelect={c => { colorBranch(selectedNodeId, c); setShowColorPicker(null); }}
+            onClose={() => setShowColorPicker(null)}
+            above={isMobile}
+          />
+        )}
+      </div>
+
+      {!isRoot && (
+        <>
+          <Divider />
+          <button
+            onClick={() => { deleteNode(selectedNodeId); setSelectedNode(null); }}
+            style={{
+              ...toolBtnStyle, color: '#E17055', padding: isMobile ? '8px 12px' : '2px 8px',
+              borderRadius: 4, fontSize: 16,
+              minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined,
+            }}
+            title="Delete node (Delete)"
+            aria-label="Delete node"
+          >🗑</button>
+        </>
+      )}
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <div
+        className="panel-enter"
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: '#fff',
+          borderTop: '1px solid #DFE6E9',
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.12)',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '6px 8px',
+          gap: 4,
+          zIndex: 40,
+          flexWrap: 'nowrap',
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
+        } as React.CSSProperties}
+        onClick={e => e.stopPropagation()}
+      >
+        {toolbarContent}
+      </div>
+    );
+  }
+
   return (
     <div
       className="panel-enter"
@@ -64,173 +279,7 @@ export const NodeToolbar: React.FC = () => {
       }}
       onClick={e => e.stopPropagation()}
     >
-      {/* Fill color */}
-      <div style={{ position: 'relative' }}>
-        <button
-          onClick={() => setShowColorPicker(showColorPicker === 'fill' ? null : 'fill')}
-          style={{
-            ...toolBtnStyle,
-            background: style.fillColor || '#F8F9FA',
-            border: `2px solid ${style.fillColor || '#DFE6E9'}`,
-            width: 24, height: 24, borderRadius: 4,
-          }}
-          title="Fill color"
-          aria-label="Fill color"
-        />
-        {showColorPicker === 'fill' && (
-          <ColorPicker
-            onSelect={c => { set({ fillColor: c, textColor: '#fff' }); setShowColorPicker(null); }}
-            onClear={() => { set({ fillColor: null, textColor: null }); setShowColorPicker(null); }}
-            onClose={() => setShowColorPicker(null)}
-          />
-        )}
-      </div>
-
-      {/* Border color */}
-      <div style={{ position: 'relative' }}>
-        <button
-          onClick={() => setShowColorPicker(showColorPicker === 'border' ? null : 'border')}
-          style={{
-            ...toolBtnStyle,
-            background: '#fff',
-            border: `3px solid ${style.borderColor || '#DFE6E9'}`,
-            width: 24, height: 24, borderRadius: 4,
-          }}
-          title="Border color"
-          aria-label="Border color"
-        />
-        {showColorPicker === 'border' && (
-          <ColorPicker
-            onSelect={c => { set({ borderColor: c }); setShowColorPicker(null); }}
-            onClear={() => { set({ borderColor: null }); setShowColorPicker(null); }}
-            onClose={() => setShowColorPicker(null)}
-          />
-        )}
-      </div>
-
-      {/* Text color — BUG 5 FIX */}
-      <div style={{ position: 'relative' }}>
-        <button
-          onClick={() => setShowColorPicker(showColorPicker === 'text' ? null : 'text')}
-          style={{
-            ...toolBtnStyle,
-            background: 'none',
-            border: `2px solid ${style.textColor || '#DFE6E9'}`,
-            width: 24, height: 24, borderRadius: 4,
-            fontSize: 12, fontWeight: 700,
-            color: style.textColor || '#2D3436',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-          title="Text color"
-          aria-label="Text color"
-        >T</button>
-        {showColorPicker === 'text' && (
-          <ColorPicker
-            onSelect={c => { set({ textColor: c }); setShowColorPicker(null); }}
-            onClear={() => { set({ textColor: null }); setShowColorPicker(null); }}
-            onClose={() => setShowColorPicker(null)}
-          />
-        )}
-      </div>
-
-      <Divider />
-
-      {/* Shape */}
-      {shapes.map(s => (
-        <button
-          key={s.key}
-          onClick={() => set({ shape: s.key })}
-          style={{
-            ...toolBtnStyle,
-            background: style.shape === s.key ? ALPHA_COLORS.primary : 'transparent',
-            color: style.shape === s.key ? '#fff' : '#636E72',
-            fontSize: 13, padding: '3px 8px', borderRadius: 4,
-          }}
-          title={s.key}
-        >{s.label}</button>
-      ))}
-
-      <Divider />
-
-      {/* Font size */}
-      {fontSizes.map(fs => (
-        <button
-          key={fs}
-          onClick={() => set({ fontSize: fs })}
-          style={{
-            ...toolBtnStyle,
-            background: style.fontSize === fs ? ALPHA_COLORS.primary : 'transparent',
-            color: style.fontSize === fs ? '#fff' : '#636E72',
-            fontSize: fs === 'xs' ? 9 : fs === 's' ? 11 : fs === 'm' ? 13 : fs === 'l' ? 15 : 18,
-            padding: '2px 5px', borderRadius: 4, minWidth: 22,
-          }}
-          title={`Font size: ${fs.toUpperCase()}`}
-        >A</button>
-      ))}
-
-      {/* Bold */}
-      <button
-        onClick={() => set({ fontWeight: style.fontWeight === 'bold' ? 'normal' : 'bold' })}
-        style={{
-          ...toolBtnStyle,
-          background: style.fontWeight === 'bold' ? ALPHA_COLORS.primary : 'transparent',
-          color: style.fontWeight === 'bold' ? '#fff' : '#636E72',
-          fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-        }}
-        title="Bold"
-      >B</button>
-
-      <Divider />
-
-      {/* Connector style */}
-      {connectors.map(c => (
-        <button
-          key={c.key}
-          onClick={() => set({ connectorStyle: c.key })}
-          style={{
-            ...toolBtnStyle,
-            background: style.connectorStyle === c.key ? ALPHA_COLORS.primary : 'transparent',
-            color: style.connectorStyle === c.key ? '#fff' : '#636E72',
-            fontSize: 12, padding: '2px 6px', borderRadius: 4,
-          }}
-          title={c.key}
-        >{c.label}</button>
-      ))}
-
-      <Divider />
-
-      {/* Color branch — FEAT 4 */}
-      <div style={{ position: 'relative' }}>
-        <button
-          onClick={() => setShowColorPicker(showColorPicker === 'branch' ? null : 'branch')}
-          style={{
-            ...toolBtnStyle,
-            background: 'transparent',
-            color: '#636E72',
-            fontSize: 14, padding: '2px 6px', borderRadius: 4,
-            border: '1px solid #DFE6E9',
-          }}
-          title="Color branch"
-        >🎨</button>
-        {showColorPicker === 'branch' && (
-          <BranchColorPicker
-            onSelect={c => { colorBranch(selectedNodeId, c); setShowColorPicker(null); }}
-            onClose={() => setShowColorPicker(null)}
-          />
-        )}
-      </div>
-
-      {!isRoot && (
-        <>
-          <Divider />
-          <button
-            onClick={() => { deleteNode(selectedNodeId); setSelectedNode(null); }}
-            style={{ ...toolBtnStyle, color: '#E17055', padding: '2px 8px', borderRadius: 4, fontSize: 16 }}
-            title="Delete node (Delete)"
-            aria-label="Delete node"
-          >🗑</button>
-        </>
-      )}
+      {toolbarContent}
     </div>
   );
 };
@@ -239,11 +288,14 @@ const ColorPicker: React.FC<{
   onSelect: (c: string) => void;
   onClear: () => void;
   onClose: () => void;
-}> = ({ onSelect, onClear, onClose }) => (
+  above?: boolean;
+}> = ({ onSelect, onClear, onClose, above }) => (
   <div
     className="panel-enter"
     style={{
-      position: 'absolute', top: '110%', left: 0,
+      position: 'absolute',
+      ...(above ? { bottom: '110%' } : { top: '110%' }),
+      left: 0,
       background: '#fff', border: '1px solid #DFE6E9',
       borderRadius: 8, padding: 8,
       boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
@@ -275,11 +327,14 @@ const ColorPicker: React.FC<{
 const BranchColorPicker: React.FC<{
   onSelect: (c: string) => void;
   onClose: () => void;
-}> = ({ onSelect, onClose }) => (
+  above?: boolean;
+}> = ({ onSelect, onClose, above }) => (
   <div
     className="panel-enter"
     style={{
-      position: 'absolute', top: '110%', left: 0,
+      position: 'absolute',
+      ...(above ? { bottom: '110%' } : { top: '110%' }),
+      left: 0,
       background: '#fff', border: '1px solid #DFE6E9',
       borderRadius: 8, padding: 8,
       boxShadow: '0 4px 16px rgba(0,0,0,0.12)',

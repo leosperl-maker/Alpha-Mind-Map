@@ -34,6 +34,13 @@ function collectVisibleEdges(
   return edges;
 }
 
+function getTouchDist(touches: React.TouchList): number {
+  if (touches.length < 2) return 0;
+  const dx = touches[0].clientX - touches[1].clientX;
+  const dy = touches[0].clientY - touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
 export const MindMapCanvas: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const maps = useMapStore(s => s.maps);
@@ -61,7 +68,7 @@ export const MindMapCanvas: React.FC = () => {
   const [isPanningActive, setIsPanningActive] = useState(false);
   const [dims, setDims] = useState({ w: window.innerWidth, h: window.innerHeight });
 
-  // Node drag state — BUG 1 fix
+  // Node drag state
   const nodeDragRef = useRef<{
     nodeId: string;
     startClientX: number;
@@ -70,6 +77,18 @@ export const MindMapCanvas: React.FC = () => {
     startWorldY: number;
     dragged: boolean;
   } | null>(null);
+
+  // Touch state refs
+  const touchStartRef = useRef<{
+    x: number;
+    y: number;
+    time: number;
+    dist: number; // for pinch
+  } | null>(null);
+  const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchPanRef = useRef<{ panX: number; panY: number; x: number; y: number } | null>(null);
+  const pinchRef = useRef<{ dist: number; zoom: number; midX: number; midY: number } | null>(null);
 
   useEffect(() => {
     const ro = new ResizeObserver(entries => {
@@ -118,7 +137,6 @@ export const MindMapCanvas: React.FC = () => {
     panStart.current = { x: e.clientX, y: e.clientY, panX, panY };
   }, [panX, panY]);
 
-  // BUG 1 FIX: real-time node position update while dragging
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     // Node drag takes priority — stops canvas pan
     if (nodeDragRef.current) {
@@ -204,8 +222,6 @@ export const MindMapCanvas: React.FC = () => {
     setTimeout(() => setEditingNode(newId), 50);
   }, [addNode, setSelectedNode, setEditingNode]);
 
-  // Called by MindNode's onDragStart — node's onMouseDown already called stopPropagation
-  // so canvas handleMouseDown never fires for node drags
   const handleNodeDragStart = useCallback((nodeId: string, e: React.MouseEvent) => {
     if (!map) return;
     const node = map.nodes[nodeId];
@@ -226,6 +242,133 @@ export const MindMapCanvas: React.FC = () => {
     setContextMenu({ x: e.clientX, y: e.clientY, nodeId });
     setSelectedNode(nodeId);
   }, [setContextMenu, setSelectedNode]);
+
+  // ── Touch handlers ──────────────────────────────────────────────────────────
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('.sticky-note')) return;
+    if ((e.target as HTMLElement).closest('.node-wrapper')) return;
+
+    const touches = e.touches;
+
+    // Clear long press timer if re-touching
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+
+    if (touches.length === 1) {
+      const t = touches[0];
+      touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now(), dist: 0 };
+      touchPanRef.current = { panX, panY, x: t.clientX, y: t.clientY };
+      pinchRef.current = null;
+
+      // Long press detection
+      longPressTimerRef.current = setTimeout(() => {
+        if (touchStartRef.current) {
+          setContextMenu({ x: touchStartRef.current.x, y: touchStartRef.current.y, nodeId: selectedNodeId || '' });
+        }
+        longPressTimerRef.current = null;
+      }, 500);
+    } else if (touches.length === 2) {
+      // Cancel long press
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      const dist = getTouchDist(touches);
+      const midX = (touches[0].clientX + touches[1].clientX) / 2;
+      const midY = (touches[0].clientY + touches[1].clientY) / 2;
+      pinchRef.current = { dist, zoom, midX, midY };
+      touchPanRef.current = null;
+      touchStartRef.current = null;
+    }
+  }, [panX, panY, zoom, selectedNodeId, setContextMenu]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    if ((e.target as HTMLElement).closest('.node-wrapper')) return;
+
+    const touches = e.touches;
+
+    // Cancel long press if moved
+    if (longPressTimerRef.current && touchStartRef.current) {
+      const t = touches[0];
+      const dx = t.clientX - touchStartRef.current.x;
+      const dy = t.clientY - touchStartRef.current.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 5) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }
+
+    if (touches.length === 1 && touchPanRef.current) {
+      // 1-finger pan
+      const t = touches[0];
+      const dx = t.clientX - touchPanRef.current.x;
+      const dy = t.clientY - touchPanRef.current.y;
+      setPan(touchPanRef.current.panX + dx, touchPanRef.current.panY + dy);
+    } else if (touches.length === 2 && pinchRef.current) {
+      // 2-finger pinch zoom
+      const newDist = getTouchDist(touches);
+      const scale = newDist / pinchRef.current.dist;
+      const newZoom = Math.max(0.2, Math.min(3, pinchRef.current.zoom * scale));
+      const rect = containerRef.current!.getBoundingClientRect();
+      const midX = pinchRef.current.midX - rect.left;
+      const midY = pinchRef.current.midY - rect.top;
+      setZoom(newZoom);
+      setPan(midX - (midX - panX) * (newZoom / zoom), midY - (midY - panY) * (newZoom / zoom));
+    }
+  }, [panX, panY, zoom, setPan, setZoom]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('.node-wrapper')) return;
+
+    // Cancel long press
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+
+    if (e.changedTouches.length === 1 && touchStartRef.current) {
+      const t = e.changedTouches[0];
+      const dx = t.clientX - touchStartRef.current.x;
+      const dy = t.clientY - touchStartRef.current.y;
+      const dt = Date.now() - touchStartRef.current.time;
+      const moved = Math.sqrt(dx * dx + dy * dy);
+
+      // Tap detection (< 200ms, < 5px movement)
+      if (dt < 200 && moved < 5) {
+        // Check for double tap
+        if (lastTapRef.current) {
+          const tapDt = Date.now() - lastTapRef.current.time;
+          const tapDx = t.clientX - lastTapRef.current.x;
+          const tapDy = t.clientY - lastTapRef.current.y;
+          const tapDist = Math.sqrt(tapDx * tapDx + tapDy * tapDy);
+          if (tapDt < 300 && tapDist < 30) {
+            // Double tap on canvas — add sticky note
+            const rect = containerRef.current!.getBoundingClientRect();
+            const wx = (t.clientX - rect.left - panX) / zoom;
+            const wy = (t.clientY - rect.top - panY) / zoom;
+            addStickyNote(wx, wy);
+            lastTapRef.current = null;
+            touchStartRef.current = null;
+            return;
+          }
+        }
+        // Single tap — deselect
+        setSelectedNode(null);
+        setEditingNode(null);
+        setSelectedConnector(null);
+        setContextMenu(null);
+        lastTapRef.current = { time: Date.now(), x: t.clientX, y: t.clientY };
+      }
+    }
+
+    touchStartRef.current = null;
+    touchPanRef.current = null;
+    pinchRef.current = null;
+  }, [panX, panY, zoom, addStickyNote, setSelectedNode, setEditingNode, setSelectedConnector, setContextMenu]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -309,7 +452,7 @@ export const MindMapCanvas: React.FC = () => {
     <div
       ref={containerRef}
       className={`canvas-container${isPanningActive ? ' panning' : ''}`}
-      style={{ top: 56 }}
+      style={{ top: 56, touchAction: 'none', userSelect: 'none' }}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -317,6 +460,9 @@ export const MindMapCanvas: React.FC = () => {
       onMouseLeave={handleMouseUp}
       onClick={handleCanvasClick}
       onDoubleClick={handleDoubleClick}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       <div
         className="canvas-transform"
@@ -395,7 +541,7 @@ export const MindMapCanvas: React.FC = () => {
 };
 
 const zoomBtnStyle: React.CSSProperties = {
-  width: 32, height: 32, background: 'white', border: '1px solid #DFE6E9',
+  width: 44, height: 44, background: 'white', border: '1px solid #DFE6E9',
   borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center',
   justifyContent: 'center', fontSize: 18, color: '#2D3436',
   boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
