@@ -1,0 +1,11 @@
+node_modules/
+src/
+public/
+.vite/
+dist/
+.env
+package*.json
+vite.config.ts
+tsconfig*
+eslint*
+*.md
