@@ -176,6 +176,7 @@ export const MindMapCanvas: React.FC = () => {
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('.sticky-note')) return;
+    if ((e.target as HTMLElement).closest('.node-wrapper')) return;
     const rect = containerRef.current!.getBoundingClientRect();
     const wx = (e.clientX - rect.left - panX) / zoom;
     const wy = (e.clientY - rect.top - panY) / zoom;

@@ -8,6 +8,7 @@ import { MindMapCanvas } from './components/Canvas/MindMapCanvas';
 import { PersonalizePanel } from './components/Panels/PersonalizePanel';
 import { NotesPanel } from './components/Panels/NotesPanel';
 import { ExportPanel } from './components/Panels/ExportPanel';
+import { SharePanel } from './components/Panels/SharePanel';
 import { DashboardPage } from './components/Dashboard/DashboardPage';
 import { ContextMenu } from './components/common/ContextMenu';
 import { SearchBar } from './components/common/SearchBar';
@@ -82,6 +83,7 @@ function App() {
       <PersonalizePanel />
       <NotesPanel />
       <ExportPanel />
+      <SharePanel />
       <ContextMenu />
       <SearchBar />
     </div>

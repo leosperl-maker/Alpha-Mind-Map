@@ -139,7 +139,7 @@ export const MindNode: React.FC<MindNodeProps> = ({
           userSelect: 'none',
         }}
         onClick={(e) => { if (!isEditing) onSelect(node.id, e); }}
-        onDoubleClick={() => onDoubleClick(node.id)}
+        onDoubleClick={(e) => { e.stopPropagation(); onDoubleClick(node.id); }}
         onMouseDown={(e) => { if (!isEditing) { e.stopPropagation(); onDragStart(node.id, e); } }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(node.id, e); }}
       >
@@ -189,6 +189,7 @@ export const MindNode: React.FC<MindNodeProps> = ({
       {hasChildren && (
         <button
           onClick={(e) => { e.stopPropagation(); toggleCollapse(node.id); }}
+          onDoubleClick={e => e.stopPropagation()}
           style={{
             position: 'absolute',
             right: node.position.side !== 'left' ? -10 : 'auto',
@@ -211,6 +212,7 @@ export const MindNode: React.FC<MindNodeProps> = ({
       {(isHovered || isSelected) && !isEditing && !node.position.collapsed && (
         <button
           onClick={(e) => { e.stopPropagation(); onAddChild(node.id); }}
+          onDoubleClick={e => e.stopPropagation()}
           onMouseDown={e => e.stopPropagation()}
           style={{
             position: 'absolute',
