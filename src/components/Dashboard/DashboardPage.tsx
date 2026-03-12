@@ -7,12 +7,14 @@ import type { MindMap } from '../../types';
 import type { Workspace } from '../../store/workspaceStore';
 import { ALPHA_COLORS } from '../../utils/colors';
 import { AppLogo } from '../common/AppLogo';
+import { useBreakpoint } from '../../hooks/useBreakpoint';
 
 type SidebarView = 'home' | 'starred' | 'recents' | 'trash' | string; // string = workspaceId
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { isMobile, isTablet } = useBreakpoint();
 
   const maps = useMapStore(s => s.maps);
   const createMap = useMapStore(s => s.createMap);
@@ -39,6 +41,7 @@ export const DashboardPage: React.FC = () => {
   const [showNewWorkspaceModal, setShowNewWorkspaceModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Map filtering
   const nonTrashed = maps.filter(m => !m.isTrashed);
@@ -87,6 +90,7 @@ export const DashboardPage: React.FC = () => {
 
   const handleSidebarSelect = (view: SidebarView) => {
     setSidebarView(view);
+    setMobileSidebarOpen(false);
     if (typeof view === 'string' && view !== 'home' && view !== 'starred' && view !== 'recents' && view !== 'trash') {
       setActiveWorkspace(view);
     }
@@ -102,163 +106,245 @@ export const DashboardPage: React.FC = () => {
     ? user.fullName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
     : (user?.email?.[0] ?? '?').toUpperCase();
 
+  // Determine grid columns based on breakpoint
+  const gridCols = isMobile
+    ? '1fr'
+    : isTablet
+    ? 'repeat(2, 1fr)'
+    : 'repeat(auto-fill, minmax(220px, 1fr))';
+
+  const sidebarContent = (
+    <>
+      {/* Logo */}
+      <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid #F0F0F0' }}>
+        <AppLogo size="sm" />
+      </div>
+
+      {/* New map button */}
+      <div style={{ padding: '12px 16px 8px' }}>
+        <button onClick={handleNewMap} style={newMapBtnStyle}>
+          <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
+          Nouvelle Map
+        </button>
+      </div>
+
+      {/* Primary nav */}
+      <nav style={{ padding: '0 8px' }}>
+        {[
+          { key: 'home' as SidebarView, label: 'Dashboard', icon: '⊞' },
+          { key: 'starred' as SidebarView, label: 'Favoris', icon: '★' },
+          { key: 'recents' as SidebarView, label: 'Récentes', icon: '⏱' },
+          { key: 'trash' as SidebarView, label: 'Corbeille', icon: '🗑' },
+        ].map(item => (
+          <NavItem
+            key={item.key}
+            label={item.label}
+            icon={item.icon}
+            active={sidebarView === item.key}
+            onClick={() => handleSidebarSelect(item.key)}
+          />
+        ))}
+      </nav>
+
+      {/* Workspace divider */}
+      <div style={{ padding: '12px 16px 4px', marginTop: 4 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#b2bec3', textTransform: 'uppercase', letterSpacing: 1 }}>
+          Espaces
+        </div>
+      </div>
+
+      {/* Workspace list */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
+        {workspaces.map(ws => (
+          <div key={ws.id} style={{ position: 'relative' }}>
+            {editingWorkspaceId === ws.id ? (
+              <WorkspaceRenameInput
+                ws={ws}
+                onSave={(name) => { updateWorkspace(ws.id, { name }); setEditingWorkspaceId(null); }}
+                onCancel={() => setEditingWorkspaceId(null)}
+              />
+            ) : (
+              <WorkspaceNavItem
+                ws={ws}
+                active={sidebarView === ws.id}
+                onClick={() => handleSidebarSelect(ws.id)}
+                mapCount={nonTrashed.filter(m => (m.workspaceId ?? 'personal') === ws.id).length}
+                onRename={() => setEditingWorkspaceId(ws.id)}
+                onDelete={() => {
+                  if (workspaces.length <= 1) return;
+                  if (confirm(`Supprimer "${ws.name}" ? Les maps seront déplacées vers Mon Espace.`)) {
+                    nonTrashed.filter(m => m.workspaceId === ws.id).forEach(m => moveMapToWorkspace(m.id, 'personal'));
+                    deleteWorkspace(ws.id);
+                    if (sidebarView === ws.id) setSidebarView('home');
+                  }
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Add workspace */}
+      <div style={{ padding: '8px 16px' }}>
+        <button
+          onClick={() => setShowNewWorkspaceModal(true)}
+          style={{ width: '100%', background: 'none', border: '1px dashed #DFE6E9', borderRadius: 8, padding: '7px 12px', fontSize: 12, color: '#636E72', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, minHeight: 44 }}
+        >
+          <span>＋</span> Nouvel espace
+        </button>
+      </div>
+
+      {/* Footer: user + settings */}
+      <div style={{ borderTop: '1px solid #DFE6E9', padding: '10px 12px', position: 'relative' }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowUserMenu(v => !v); }}
+          style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, padding: '4px 4px', borderRadius: 8, transition: 'background 120ms', minHeight: 44 }}
+          onMouseEnter={e => e.currentTarget.style.background = '#F8F9FA'}
+          onMouseLeave={e => e.currentTarget.style.background = 'none'}
+        >
+          <div style={{ width: 32, height: 32, borderRadius: '50%', background: ALPHA_COLORS.primary + '25', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: ALPHA_COLORS.primary, flexShrink: 0 }}>
+            {initials}
+          </div>
+          <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#2D3436', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {user?.fullName || 'Utilisateur'}
+            </div>
+            <div style={{ fontSize: 11, color: '#636E72', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {user?.email}
+            </div>
+          </div>
+          <span style={{ fontSize: 12, color: '#b2bec3' }}>⋯</span>
+        </button>
+
+        {showUserMenu && (
+          <div
+            className="panel-enter"
+            onClick={e => e.stopPropagation()}
+            style={{ position: 'absolute', bottom: '110%', left: 12, right: 12, background: '#fff', border: '1px solid #DFE6E9', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.12)', overflow: 'hidden', zIndex: 50 }}
+          >
+            <button onClick={() => { setShowUserMenu(false); navigate('/settings'); }} style={userMenuItemStyle}>⚙ Paramètres</button>
+            <div style={{ borderTop: '1px solid #F0F0F0' }} />
+            <button onClick={handleSignOut} style={{ ...userMenuItemStyle, color: '#E17055' }}>🚪 Déconnexion</button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div style={{ display: 'flex', height: '100vh', background: '#F8F9FA' }} onClick={() => { setMenuOpenId(null); setShowUserMenu(false); }}>
 
-      {/* ── SIDEBAR ─────────────────────────────────────────────────────── */}
-      <aside style={{
-        width: 240, background: '#fff', borderRight: '1px solid #DFE6E9',
-        display: 'flex', flexDirection: 'column', flexShrink: 0,
-        overflow: 'hidden',
-      }}>
-        {/* Logo */}
-        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid #F0F0F0' }}>
-          <AppLogo size="sm" />
-        </div>
+      {/* ── SIDEBAR — desktop/tablet only ────────────────────────────────── */}
+      {!isMobile && (
+        <aside style={{
+          width: 240, background: '#fff', borderRight: '1px solid #DFE6E9',
+          display: 'flex', flexDirection: 'column', flexShrink: 0,
+          overflow: 'hidden',
+        }}>
+          {sidebarContent}
+        </aside>
+      )}
 
-        {/* New map button */}
-        <div style={{ padding: '12px 16px 8px' }}>
-          <button onClick={handleNewMap} style={newMapBtnStyle}>
-            <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
-            Nouvelle Map
-          </button>
-        </div>
-
-        {/* Primary nav */}
-        <nav style={{ padding: '0 8px' }}>
-          {[
-            { key: 'home' as SidebarView, label: 'Dashboard', icon: '⊞' },
-            { key: 'starred' as SidebarView, label: 'Favoris', icon: '★' },
-            { key: 'recents' as SidebarView, label: 'Récentes', icon: '⏱' },
-            { key: 'trash' as SidebarView, label: 'Corbeille', icon: '🗑' },
-          ].map(item => (
-            <NavItem
-              key={item.key}
-              label={item.label}
-              icon={item.icon}
-              active={sidebarView === item.key}
-              onClick={() => handleSidebarSelect(item.key)}
-            />
-          ))}
-        </nav>
-
-        {/* Workspace divider */}
-        <div style={{ padding: '12px 16px 4px', marginTop: 4 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#b2bec3', textTransform: 'uppercase', letterSpacing: 1 }}>
-            Espaces
+      {/* ── MOBILE SIDEBAR OVERLAY ──────────────────────────────────────── */}
+      {isMobile && mobileSidebarOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex' }}>
+          {/* Backdrop */}
+          <div
+            onClick={() => setMobileSidebarOpen(false)}
+            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }}
+          />
+          {/* Drawer from bottom */}
+          <div
+            style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
+              background: '#fff', borderRadius: '16px 16px 0 0',
+              maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 -4px 32px rgba(0,0,0,0.18)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Handle */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }}>
+              <div style={{ width: 40, height: 4, borderRadius: 2, background: '#DFE6E9' }} />
+            </div>
+            {sidebarContent}
           </div>
         </div>
-
-        {/* Workspace list */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
-          {workspaces.map(ws => (
-            <div key={ws.id} style={{ position: 'relative' }}>
-              {editingWorkspaceId === ws.id ? (
-                <WorkspaceRenameInput
-                  ws={ws}
-                  onSave={(name) => { updateWorkspace(ws.id, { name }); setEditingWorkspaceId(null); }}
-                  onCancel={() => setEditingWorkspaceId(null)}
-                />
-              ) : (
-                <WorkspaceNavItem
-                  ws={ws}
-                  active={sidebarView === ws.id}
-                  onClick={() => handleSidebarSelect(ws.id)}
-                  mapCount={nonTrashed.filter(m => (m.workspaceId ?? 'personal') === ws.id).length}
-                  onRename={() => setEditingWorkspaceId(ws.id)}
-                  onDelete={() => {
-                    if (workspaces.length <= 1) return;
-                    if (confirm(`Supprimer "${ws.name}" ? Les maps seront déplacées vers Mon Espace.`)) {
-                      nonTrashed.filter(m => m.workspaceId === ws.id).forEach(m => moveMapToWorkspace(m.id, 'personal'));
-                      deleteWorkspace(ws.id);
-                      if (sidebarView === ws.id) setSidebarView('home');
-                    }
-                  }}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Add workspace */}
-        <div style={{ padding: '8px 16px' }}>
-          <button
-            onClick={() => setShowNewWorkspaceModal(true)}
-            style={{ width: '100%', background: 'none', border: '1px dashed #DFE6E9', borderRadius: 8, padding: '7px 12px', fontSize: 12, color: '#636E72', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <span>＋</span> Nouvel espace
-          </button>
-        </div>
-
-        {/* Footer: user + settings */}
-        <div style={{ borderTop: '1px solid #DFE6E9', padding: '10px 12px', position: 'relative' }}>
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowUserMenu(v => !v); }}
-            style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, padding: '4px 4px', borderRadius: 8, transition: 'background 120ms' }}
-            onMouseEnter={e => e.currentTarget.style.background = '#F8F9FA'}
-            onMouseLeave={e => e.currentTarget.style.background = 'none'}
-          >
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: ALPHA_COLORS.primary + '25', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: ALPHA_COLORS.primary, flexShrink: 0 }}>
-              {initials}
-            </div>
-            <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#2D3436', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {user?.fullName || 'Utilisateur'}
-              </div>
-              <div style={{ fontSize: 11, color: '#636E72', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {user?.email}
-              </div>
-            </div>
-            <span style={{ fontSize: 12, color: '#b2bec3' }}>⋯</span>
-          </button>
-
-          {showUserMenu && (
-            <div
-              className="panel-enter"
-              onClick={e => e.stopPropagation()}
-              style={{ position: 'absolute', bottom: '110%', left: 12, right: 12, background: '#fff', border: '1px solid #DFE6E9', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.12)', overflow: 'hidden', zIndex: 50 }}
-            >
-              <button onClick={() => { setShowUserMenu(false); navigate('/settings'); }} style={userMenuItemStyle}>⚙ Paramètres</button>
-              <div style={{ borderTop: '1px solid #F0F0F0' }} />
-              <button onClick={handleSignOut} style={{ ...userMenuItemStyle, color: '#E17055' }}>🚪 Déconnexion</button>
-            </div>
-          )}
-        </div>
-      </aside>
+      )}
 
       {/* ── MAIN ────────────────────────────────────────────────────────── */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Header */}
-        <div style={{ padding: '20px 28px 16px', borderBottom: '1px solid #DFE6E9', background: '#fff', display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#2D3436' }}>{getSectionTitle()}</h1>
-            {sidebarView !== 'home' && sidebarView !== 'starred' && sidebarView !== 'recents' && sidebarView !== 'trash' && (
+        <div style={{
+          padding: isMobile ? '12px 16px' : '20px 28px 16px',
+          borderBottom: '1px solid #DFE6E9', background: '#fff',
+          display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 16, flexShrink: 0,
+        }}>
+          {/* Hamburger on mobile */}
+          {isMobile && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setMobileSidebarOpen(true); }}
+              style={{
+                background: 'none', border: '1px solid #DFE6E9', borderRadius: 6,
+                width: 44, height: 44, cursor: 'pointer', fontSize: 18, color: '#636E72',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}
+              aria-label="Open menu"
+            >☰</button>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h1 style={{ margin: 0, fontSize: isMobile ? 16 : 20, fontWeight: 700, color: '#2D3436', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{getSectionTitle()}</h1>
+            {!isMobile && sidebarView !== 'home' && sidebarView !== 'starred' && sidebarView !== 'recents' && sidebarView !== 'trash' && (
               <p style={{ margin: '2px 0 0', fontSize: 13, color: '#636E72' }}>
                 {workspaces.find(w => w.id === sidebarView)?.description}
               </p>
             )}
           </div>
-          <div style={{ flex: 1 }} />
-          <input
-            type="text"
-            placeholder="Rechercher…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{ padding: '8px 14px', border: '1px solid #DFE6E9', borderRadius: 8, fontSize: 13, outline: 'none', width: 220, color: '#2D3436' }}
-          />
+          {!isMobile && (
+            <input
+              type="text"
+              placeholder="Rechercher…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ padding: '8px 14px', border: '1px solid #DFE6E9', borderRadius: 8, fontSize: 13, outline: 'none', width: 220, color: '#2D3436' }}
+            />
+          )}
           {sidebarView !== 'trash' && (
-            <button onClick={handleNewMap} style={{ background: ALPHA_COLORS.primary, color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              + Nouvelle Map
+            <button onClick={handleNewMap} style={{
+              background: ALPHA_COLORS.primary, color: '#fff', border: 'none', borderRadius: 8,
+              padding: isMobile ? '8px 12px' : '8px 18px',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+              minHeight: 44, whiteSpace: 'nowrap',
+            }}>
+              + {isMobile ? 'Nouveau' : 'Nouvelle Map'}
             </button>
           )}
         </div>
 
+        {/* Search on mobile */}
+        {isMobile && (
+          <div style={{ padding: '8px 16px', background: '#fff', borderBottom: '1px solid #DFE6E9' }}>
+            <input
+              type="text"
+              placeholder="Rechercher…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ width: '100%', padding: '8px 14px', border: '1px solid #DFE6E9', borderRadius: 8, fontSize: 13, outline: 'none', color: '#2D3436', boxSizing: 'border-box' }}
+            />
+          </div>
+        )}
+
         {/* Map grid */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px' }} onClick={() => setMenuOpenId(null)}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px' : '24px 28px' }} onClick={() => setMenuOpenId(null)}>
           {filtered.length === 0 ? (
             <EmptyState onNew={handleNewMap} search={search} view={sidebarView} />
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: gridCols,
+              gap: isMobile ? 8 : 16,
+            }}>
               {filtered.map(map => (
                 <MapCard
                   key={map.id}
@@ -268,6 +354,7 @@ export const DashboardPage: React.FC = () => {
                   isRenaming={renamingId === map.id}
                   renameDraft={renameDraft}
                   isTrashed={sidebarView === 'trash'}
+                  isMobile={isMobile}
                   onOpen={() => handleOpenMap(map)}
                   onMenuToggle={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === map.id ? null : map.id); }}
                   onMenuClose={() => setMenuOpenId(null)}
@@ -313,6 +400,7 @@ const NavItem: React.FC<{ label: string; icon: string; active: boolean; onClick:
       fontSize: 13, color: active ? ALPHA_COLORS.primary : '#636E72',
       fontWeight: active ? 600 : 400, cursor: 'pointer',
       display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', transition: 'all 120ms',
+      minHeight: 44,
     }}
   >
     <span style={{ fontSize: 14 }}>{icon}</span>
@@ -341,6 +429,7 @@ const WorkspaceNavItem: React.FC<{
           fontSize: 13, color: active ? ALPHA_COLORS.primary : '#2D3436',
           fontWeight: active ? 600 : 400, cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', transition: 'all 120ms',
+          minHeight: 44,
         }}
         onMouseEnter={e => { if (!active) e.currentTarget.style.background = '#F8F9FA'; }}
         onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent'; }}
@@ -390,6 +479,7 @@ const MapCard: React.FC<{
   isRenaming: boolean;
   renameDraft: string;
   isTrashed: boolean;
+  isMobile: boolean;
   onOpen: () => void;
   onMenuToggle: (e: React.MouseEvent) => void;
   onMenuClose: () => void;
@@ -402,10 +492,107 @@ const MapCard: React.FC<{
   onRestore: () => void;
   onDelete: () => void;
   onMove: (wsId: string) => void;
-}> = ({ map, workspaces, isMenuOpen, isRenaming, renameDraft, isTrashed, onOpen, onMenuToggle, onMenuClose, onRenameStart, onRenameChange, onRenameCommit, onDuplicate, onStar, onTrash, onRestore, onDelete, onMove }) => {
+}> = ({ map, workspaces, isMenuOpen, isRenaming, renameDraft, isTrashed, isMobile, onOpen, onMenuToggle, onMenuClose, onRenameStart, onRenameChange, onRenameCommit, onDuplicate, onStar, onTrash, onRestore, onDelete, onMove }) => {
   const nodeCount = Object.keys(map.nodes).length;
   const ws = workspaces.find(w => w.id === (map.workspaceId ?? 'personal'));
 
+  const contextMenuContent = (
+    <>
+      {isTrashed ? (
+        <>
+          <button onClick={() => { onRestore(); onMenuClose(); }} style={cardMenuItemStyle}>↩ Restaurer</button>
+          <div style={{ borderTop: '1px solid #DFE6E9' }} />
+          <button onClick={onDelete} style={{ ...cardMenuItemStyle, color: '#E17055' }}>🗑 Supprimer définitivement</button>
+        </>
+      ) : (
+        <>
+          <button onClick={() => { onOpen(); onMenuClose(); }} style={cardMenuItemStyle}>↗ Ouvrir</button>
+          <button onClick={() => { onRenameStart(); onMenuClose(); }} style={cardMenuItemStyle}>✏ Renommer</button>
+          <button onClick={onDuplicate} style={cardMenuItemStyle}>⧉ Dupliquer</button>
+          <button onClick={onStar} style={cardMenuItemStyle}>{map.isStarred ? '☆ Retirer des favoris' : '★ Ajouter aux favoris'}</button>
+          {workspaces.length > 1 && (
+            <>
+              <div style={{ borderTop: '1px solid #DFE6E9', padding: '4px 12px', fontSize: 10, fontWeight: 700, color: '#b2bec3', textTransform: 'uppercase', letterSpacing: 0.8 }}>Déplacer vers</div>
+              {workspaces.filter(w => w.id !== (map.workspaceId ?? 'personal')).map(w => (
+                <button key={w.id} onClick={() => onMove(w.id)} style={cardMenuItemStyle}>{w.icon} {w.name}</button>
+              ))}
+            </>
+          )}
+          <div style={{ borderTop: '1px solid #DFE6E9' }} />
+          <button onClick={onTrash} style={{ ...cardMenuItemStyle, color: '#E17055' }}>🗑 Mettre à la corbeille</button>
+        </>
+      )}
+    </>
+  );
+
+  if (isMobile) {
+    // Horizontal card layout for mobile
+    return (
+      <div
+        onClick={isTrashed ? undefined : onOpen}
+        style={{
+          background: '#fff', border: '1px solid #DFE6E9', borderRadius: 10,
+          overflow: 'hidden', cursor: isTrashed ? 'default' : 'pointer',
+          display: 'flex', alignItems: 'center', height: 80,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+        }}
+      >
+        {/* Thumbnail */}
+        <div style={{
+          width: 80, height: 80, flexShrink: 0,
+          background: 'linear-gradient(135deg, ' + (map.settings.themeColor || '#7C5CE7') + '15, ' + (map.settings.themeColor || '#7C5CE7') + '30)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <MapThumbnail map={map} small />
+        </div>
+
+        {/* Info */}
+        <div style={{ flex: 1, padding: '0 12px', overflow: 'hidden' }}>
+          {isRenaming ? (
+            <input
+              autoFocus
+              value={renameDraft}
+              onChange={e => onRenameChange(e.target.value)}
+              onBlur={onRenameCommit}
+              onKeyDown={e => { if (e.key === 'Enter') onRenameCommit(); if (e.key === 'Escape') onRenameCommit(); e.stopPropagation(); }}
+              onClick={e => e.stopPropagation()}
+              style={{ width: '100%', border: '1px solid ' + ALPHA_COLORS.primary, borderRadius: 4, padding: '2px 6px', fontSize: 13, fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+            />
+          ) : (
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#2D3436', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {map.isStarred && <span style={{ color: '#FDCB6E', marginRight: 4 }}>★</span>}
+              {map.title}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: '#b2bec3', marginTop: 2 }}>
+            {nodeCount} nœud{nodeCount !== 1 ? 's' : ''} · {formatDate(map.updatedAt)}
+            {ws && <span> · {ws.icon}</span>}
+          </div>
+        </div>
+
+        {/* Menu button */}
+        <div style={{ padding: '0 8px', position: 'relative' }} onClick={e => e.stopPropagation()}>
+          <button
+            onClick={onMenuToggle}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 8px', borderRadius: 4, fontSize: 18, color: '#636E72', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            aria-label="Options"
+          >⋯</button>
+
+          {isMenuOpen && (
+            <div
+              className="panel-enter"
+              onClick={e => e.stopPropagation()}
+              style={{ position: 'absolute', right: 0, bottom: '100%', background: '#fff', border: '1px solid #DFE6E9', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.12)', zIndex: 60, minWidth: 180, overflow: 'hidden' }}
+            >
+              {contextMenuContent}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop/tablet card
   return (
     <div
       onClick={isTrashed ? undefined : onOpen}
@@ -451,7 +638,7 @@ const MapCard: React.FC<{
 
       {/* Actions footer */}
       <div style={{ borderTop: '1px solid #F0F0F0', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', position: 'relative' }} onClick={e => e.stopPropagation()}>
-        <button onClick={onMenuToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 8px', borderRadius: 4, fontSize: 18, color: '#636E72' }} aria-label="Options">⋯</button>
+        <button onClick={onMenuToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '3px 8px', borderRadius: 4, fontSize: 18, color: '#636E72', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }} aria-label="Options">⋯</button>
 
         {isMenuOpen && (
           <div
@@ -459,30 +646,7 @@ const MapCard: React.FC<{
             onClick={e => e.stopPropagation()}
             style={{ position: 'absolute', right: 0, bottom: '100%', background: '#fff', border: '1px solid #DFE6E9', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.12)', zIndex: 60, minWidth: 180, overflow: 'hidden' }}
           >
-            {isTrashed ? (
-              <>
-                <button onClick={() => { onRestore(); onMenuClose(); }} style={cardMenuItemStyle}>↩ Restaurer</button>
-                <div style={{ borderTop: '1px solid #DFE6E9' }} />
-                <button onClick={onDelete} style={{ ...cardMenuItemStyle, color: '#E17055' }}>🗑 Supprimer définitivement</button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => { onOpen(); onMenuClose(); }} style={cardMenuItemStyle}>↗ Ouvrir</button>
-                <button onClick={() => { onRenameStart(); onMenuClose(); }} style={cardMenuItemStyle}>✏ Renommer</button>
-                <button onClick={onDuplicate} style={cardMenuItemStyle}>⧉ Dupliquer</button>
-                <button onClick={onStar} style={cardMenuItemStyle}>{map.isStarred ? '☆ Retirer des favoris' : '★ Ajouter aux favoris'}</button>
-                {workspaces.length > 1 && (
-                  <>
-                    <div style={{ borderTop: '1px solid #DFE6E9', padding: '4px 12px', fontSize: 10, fontWeight: 700, color: '#b2bec3', textTransform: 'uppercase', letterSpacing: 0.8 }}>Déplacer vers</div>
-                    {workspaces.filter(w => w.id !== (map.workspaceId ?? 'personal')).map(w => (
-                      <button key={w.id} onClick={() => onMove(w.id)} style={cardMenuItemStyle}>{w.icon} {w.name}</button>
-                    ))}
-                  </>
-                )}
-                <div style={{ borderTop: '1px solid #DFE6E9' }} />
-                <button onClick={onTrash} style={{ ...cardMenuItemStyle, color: '#E17055' }}>🗑 Mettre à la corbeille</button>
-              </>
-            )}
+            {contextMenuContent}
           </div>
         )}
       </div>
@@ -492,14 +656,17 @@ const MapCard: React.FC<{
 
 // ── SVG mini thumbnail ────────────────────────────────────────────────────────
 
-const MapThumbnail: React.FC<{ map: MindMap }> = ({ map }) => {
+const MapThumbnail: React.FC<{ map: MindMap; small?: boolean }> = ({ map, small }) => {
   const color = map.settings.themeColor || '#7C5CE7';
   const nodeCount = Object.keys(map.nodes).length;
   const arms = Math.min(8, Math.max(2, nodeCount - 1));
-  const r = 28;
-  const cx = 60; const cy = 45;
+  const w = small ? 60 : 120;
+  const h = small ? 60 : 90;
+  const r = small ? 18 : 28;
+  const cx = w / 2;
+  const cy = h / 2;
   return (
-    <svg width="120" height="90" viewBox="0 0 120 90" fill="none" style={{ opacity: 0.7 }}>
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" style={{ opacity: 0.7 }}>
       {Array.from({ length: arms }).map((_, i) => {
         const angle = (i / arms) * Math.PI * 2 - Math.PI / 2;
         const ex = cx + Math.cos(angle) * r;
@@ -507,11 +674,11 @@ const MapThumbnail: React.FC<{ map: MindMap }> = ({ map }) => {
         return (
           <g key={i}>
             <line x1={cx} y1={cy} x2={ex} y2={ey} stroke={color} strokeWidth={1.5} strokeOpacity={0.5} />
-            <circle cx={ex} cy={ey} r={5} fill={color} opacity={0.4} />
+            <circle cx={ex} cy={ey} r={small ? 3 : 5} fill={color} opacity={0.4} />
           </g>
         );
       })}
-      <circle cx={cx} cy={cy} r={10} fill={color} opacity={0.8} />
+      <circle cx={cx} cy={cy} r={small ? 6 : 10} fill={color} opacity={0.8} />
     </svg>
   );
 };
@@ -537,8 +704,8 @@ const NewWorkspaceModal: React.FC<{
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
-      <div className="panel-enter" onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 28, width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }} onClick={onClose}>
+      <div className="panel-enter" onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 16, padding: 28, width: '100%', maxWidth: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <h2 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, color: '#2D3436' }}>Nouvel espace de travail</h2>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Icon picker */}
@@ -546,7 +713,7 @@ const NewWorkspaceModal: React.FC<{
             <label style={{ fontSize: 13, fontWeight: 600, color: '#2D3436', display: 'block', marginBottom: 8 }}>Icône</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {PRESET_ICONS.map(ic => (
-                <button key={ic} type="button" onClick={() => setIcon(ic)} style={{ width: 36, height: 36, background: icon === ic ? color + '20' : '#F8F9FA', border: `2px solid ${icon === ic ? color : 'transparent'}`, borderRadius: 8, cursor: 'pointer', fontSize: 18 }}>{ic}</button>
+                <button key={ic} type="button" onClick={() => setIcon(ic)} style={{ width: 44, height: 44, background: icon === ic ? color + '20' : '#F8F9FA', border: `2px solid ${icon === ic ? color : 'transparent'}`, borderRadius: 8, cursor: 'pointer', fontSize: 18 }}>{ic}</button>
               ))}
             </div>
           </div>
@@ -554,9 +721,9 @@ const NewWorkspaceModal: React.FC<{
           {/* Color picker */}
           <div>
             <label style={{ fontSize: 13, fontWeight: 600, color: '#2D3436', display: 'block', marginBottom: 8 }}>Couleur</label>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {PRESET_COLORS.map(c => (
-                <button key={c} type="button" onClick={() => setColor(c)} style={{ width: 28, height: 28, borderRadius: '50%', background: c, border: `3px solid ${color === c ? '#2D3436' : 'transparent'}`, cursor: 'pointer', padding: 0 }} />
+                <button key={c} type="button" onClick={() => setColor(c)} style={{ width: 36, height: 36, borderRadius: '50%', background: c, border: `3px solid ${color === c ? '#2D3436' : 'transparent'}`, cursor: 'pointer', padding: 0 }} />
               ))}
             </div>
           </div>
@@ -572,10 +739,10 @@ const NewWorkspaceModal: React.FC<{
           </div>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-            <button type="submit" style={{ flex: 1, padding: '10px', background: color, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+            <button type="submit" style={{ flex: 1, padding: '10px', background: color, color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', minHeight: 44 }}>
               Créer l'espace
             </button>
-            <button type="button" onClick={onClose} style={{ padding: '10px 20px', background: '#F8F9FA', border: '1px solid #DFE6E9', borderRadius: 8, fontSize: 14, cursor: 'pointer', color: '#636E72' }}>
+            <button type="button" onClick={onClose} style={{ padding: '10px 20px', background: '#F8F9FA', border: '1px solid #DFE6E9', borderRadius: 8, fontSize: 14, cursor: 'pointer', color: '#636E72', minHeight: 44 }}>
               Annuler
             </button>
           </div>
@@ -599,7 +766,7 @@ const EmptyState: React.FC<{ onNew: () => void; search: string; view: SidebarVie
       {search ? 'Essayez un autre terme de recherche.' : view === 'trash' ? 'Les maps supprimées apparaissent ici.' : 'Créez votre première mind map.'}
     </div>
     {!search && view !== 'trash' && (
-      <button onClick={onNew} style={{ background: ALPHA_COLORS.primary, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+      <button onClick={onNew} style={{ background: ALPHA_COLORS.primary, color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', minHeight: 44 }}>
         + Créer une map
       </button>
     )}
@@ -624,23 +791,23 @@ function formatDate(iso: string): string {
 const newMapBtnStyle: React.CSSProperties = {
   width: '100%', background: ALPHA_COLORS.primary, color: '#fff', border: 'none',
   borderRadius: 8, padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44,
 };
 
 const userMenuItemStyle: React.CSSProperties = {
   width: '100%', background: 'none', border: 'none', padding: '10px 16px',
   fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-  color: '#2D3436', textAlign: 'left',
+  color: '#2D3436', textAlign: 'left', minHeight: 44,
 };
 
 const wsMenuItemStyle: React.CSSProperties = {
   width: '100%', background: 'none', border: 'none', padding: '8px 14px',
   fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-  color: '#2D3436', textAlign: 'left',
+  color: '#2D3436', textAlign: 'left', minHeight: 44,
 };
 
 const cardMenuItemStyle: React.CSSProperties = {
   width: '100%', background: 'none', border: 'none', padding: '9px 14px',
   fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
-  color: '#2D3436', textAlign: 'left',
+  color: '#2D3436', textAlign: 'left', minHeight: 44,
 };

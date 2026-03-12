@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { isMockMode } from '../lib/supabase';
 import { AppLogo } from '../components/common/AppLogo';
+import { useBreakpoint } from '../hooks/useBreakpoint';
 
 export const LoginPage: React.FC = () => {
   const { signIn, signInWithGoogle } = useAuth();
@@ -114,27 +115,30 @@ export const LoginPage: React.FC = () => {
 
 // ── Shared auth page layout ───────────────────────────────────────────────────
 
-export const AuthLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div style={{
-    minHeight: '100vh',
-    background: 'linear-gradient(135deg, #6C5CE7 0%, #A29BFE 100%)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  }}>
+export const AuthLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isMobile } = useBreakpoint();
+  return (
     <div style={{
-      background: '#fff',
-      borderRadius: 16,
-      boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
-      padding: '40px 36px',
-      width: '100%',
-      maxWidth: 420,
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #6C5CE7 0%, #A29BFE 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: isMobile ? 16 : 20,
     }}>
-      {children}
+      <div style={{
+        background: '#fff',
+        borderRadius: 16,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
+        padding: isMobile ? '32px 24px' : '40px 36px',
+        width: isMobile ? '90%' : '100%',
+        maxWidth: 420,
+      }}>
+        {children}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
