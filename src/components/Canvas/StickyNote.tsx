@@ -91,7 +91,7 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
       onDoubleClick={e => e.stopPropagation()}
       onClick={e => e.stopPropagation()}
     >
-      {/* Header drag bar */}
+      {/* Header drag bar — dragging propagates to outer onMouseDown */}
       <div
         className="sticky-controls"
         style={{
@@ -99,7 +99,6 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
           padding: '4px 6px', borderBottom: '1px solid rgba(0,0,0,0.08)',
           cursor: 'grab',
         }}
-        onMouseDown={e => e.stopPropagation()}
       >
         <div style={{ position: 'relative' }}>
           <button

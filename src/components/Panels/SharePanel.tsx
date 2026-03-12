@@ -1,6 +1,4 @@
 import React, { useRef, useState } from 'react';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { useMapStore } from '../../store/mapStore';
 import { useUIStore } from '../../store/uiStore';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
@@ -15,7 +13,6 @@ export const SharePanel: React.FC = () => {
   const setActiveMap = useMapStore(s => s.setActiveMap);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState(false);
-  const [pdfStatus, setPdfStatus] = useState<'idle' | 'generating' | 'done'>('idle');
   const { isMobile } = useBreakpoint();
 
   if (activePanel !== 'share') return null;
@@ -71,31 +68,18 @@ export const SharePanel: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleExportPDF = async () => {
-    const canvasEl = document.querySelector('.canvas-transform') as HTMLElement | null;
-    if (!canvasEl) { alert('No canvas found.'); return; }
-    setPdfStatus('generating');
-    try {
-      const snapshot = await html2canvas(canvasEl, {
-        backgroundColor: '#F8F9FA',
-        scale: 1.5,
-        useCORS: true,
-        logging: false,
-      });
-      const imgData = snapshot.toDataURL('image/jpeg', 0.92);
-      const pdfW = snapshot.width / 1.5;
-      const pdfH = snapshot.height / 1.5;
-      const orientation = pdfW > pdfH ? 'landscape' : 'portrait';
-      const pdf = new jsPDF({ orientation, unit: 'px', format: [pdfW, pdfH] });
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH);
-      pdf.save(`${map?.title || 'mind-map'}.pdf`);
-      setPdfStatus('done');
-      setTimeout(() => setPdfStatus('idle'), 2500);
-    } catch (err) {
-      console.error(err);
-      alert('PDF export failed. Try "Print / Save PDF" in the Export panel.');
-      setPdfStatus('idle');
-    }
+  const handleExportPDF = () => {
+    // Close panel, then print (browser handles PDF export via Ctrl+P / Save as PDF)
+    setActivePanel(null);
+    requestAnimationFrame(() => {
+      window.print();
+      // Restore panel after print dialog closes
+      const restore = () => {
+        setActivePanel('share');
+        window.removeEventListener('afterprint', restore);
+      };
+      window.addEventListener('afterprint', restore);
+    });
   };
 
   const panelContent = (
@@ -153,17 +137,10 @@ export const SharePanel: React.FC = () => {
       {/* PDF */}
       <Section title="Export PDF">
         <ShareBtn
-          icon={pdfStatus === 'generating' ? '⟳' : pdfStatus === 'done' ? '✓' : '⬇'}
-          label={pdfStatus === 'generating' ? 'Generating…' : pdfStatus === 'done' ? 'PDF saved!' : 'Download PDF'}
-          desc="High-quality snapshot of the current map view"
+          icon="⬇"
+          label="Download PDF"
+          desc="Opens browser print dialog — choose 'Save as PDF'"
           onClick={handleExportPDF}
-          disabled={pdfStatus === 'generating'}
-        />
-        <ShareBtn
-          icon="🖨"
-          label="Print / Save PDF"
-          desc="Use browser print dialog (Ctrl+P) for more options"
-          onClick={() => window.print()}
         />
       </Section>
     </div>

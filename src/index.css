@@ -100,3 +100,12 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #DFE6E9; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #b2bec3; }
+
+/* ── Print / PDF export ──────────────────────────────────────────────────── */
+@media print {
+  /* Hide fixed toolbars and panels */
+  .no-print { display: none !important; }
+  /* Page settings */
+  @page { margin: 0.5cm; }
+  html, body { background: #fff; }
+}
