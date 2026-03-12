@@ -12,6 +12,19 @@
     <link rel="apple-touch-icon" href="/Alpha-Mind-Map/icons/icon-192.png">
     <link rel="manifest" href="/Alpha-Mind-Map/manifest.json">
     <title>Alpha Mind Map</title>
+    <!-- GitHub Pages SPA redirect: restore path from 404.html, preserve hash for Supabase OAuth tokens -->
+    <script>
+      (function() {
+        var p = new URLSearchParams(window.location.search).get('p');
+        if (p) {
+          var base = '/Alpha-Mind-Map';
+          window.history.replaceState(
+            null, '',
+            base + decodeURIComponent(p) + window.location.hash
+          );
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
