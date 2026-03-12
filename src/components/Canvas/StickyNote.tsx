@@ -41,6 +41,57 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
     window.addEventListener('mouseup', onUp);
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
+    if ((e.target as HTMLElement).closest('.sticky-resize')) return;
+    if ((e.target as HTMLElement).closest('.sticky-controls')) return;
+    if (e.touches.length !== 1) return;
+    e.stopPropagation();
+    const t = e.touches[0];
+    dragRef.current = { startX: t.clientX, startY: t.clientY, noteX: note.x, noteY: note.y };
+    const currentZoom = useUIStore.getState().zoom;
+    const onMove = (me: TouchEvent) => {
+      me.preventDefault();
+      if (!dragRef.current || me.touches.length !== 1) return;
+      const touch = me.touches[0];
+      updateStickyNote(note.id, {
+        x: dragRef.current.noteX + (touch.clientX - dragRef.current.startX) / currentZoom,
+        y: dragRef.current.noteY + (touch.clientY - dragRef.current.startY) / currentZoom,
+      });
+    };
+    const onEnd = () => {
+      dragRef.current = null;
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+  };
+
+  const handleResizeTouchStart = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    resizeRef.current = { startX: t.clientX, startY: t.clientY, startW: note.width, startH: note.height };
+    const currentZoom = useUIStore.getState().zoom;
+    const onMove = (me: TouchEvent) => {
+      me.preventDefault();
+      if (!resizeRef.current || me.touches.length !== 1) return;
+      const touch = me.touches[0];
+      updateStickyNote(note.id, {
+        width: Math.max(120, resizeRef.current.startW + (touch.clientX - resizeRef.current.startX) / currentZoom),
+        height: Math.max(80, resizeRef.current.startH + (touch.clientY - resizeRef.current.startY) / currentZoom),
+      });
+    };
+    const onEnd = () => {
+      resizeRef.current = null;
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+  };
+
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -88,6 +139,7 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
         userSelect: 'none',
       }}
       onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
       onDoubleClick={e => e.stopPropagation()}
       onClick={e => e.stopPropagation()}
     >
@@ -157,6 +209,7 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
       <div
         className="sticky-resize"
         onMouseDown={handleResizeMouseDown}
+        onTouchStart={handleResizeTouchStart}
         style={{
           position: 'absolute', bottom: 0, right: 0,
           width: 16, height: 16, cursor: 'se-resize',

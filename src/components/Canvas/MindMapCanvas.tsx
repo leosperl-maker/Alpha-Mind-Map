@@ -246,8 +246,8 @@ export const MindMapCanvas: React.FC = () => {
   // ── Touch handlers ──────────────────────────────────────────────────────────
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // Let StickyNote handle its own touch events
     if ((e.target as HTMLElement).closest('.sticky-note')) return;
-    if ((e.target as HTMLElement).closest('.node-wrapper')) return;
 
     const touches = e.touches;
 
@@ -255,6 +255,28 @@ export const MindMapCanvas: React.FC = () => {
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
+    }
+
+    // If touching a node, start node drag
+    const nodeWrapper = (e.target as HTMLElement).closest('.node-wrapper') as HTMLElement | null;
+    if (nodeWrapper && touches.length === 1 && map) {
+      const nodeId = nodeWrapper.dataset.nodeId;
+      if (nodeId && map.nodes[nodeId]) {
+        const node = map.nodes[nodeId];
+        const t = touches[0];
+        isPanning.current = false;
+        touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now(), dist: 0 };
+        touchPanRef.current = null;
+        nodeDragRef.current = {
+          nodeId,
+          startClientX: t.clientX,
+          startClientY: t.clientY,
+          startWorldX: node.position.x,
+          startWorldY: node.position.y,
+          dragged: false,
+        };
+        return;
+      }
     }
 
     if (touches.length === 1) {
@@ -283,11 +305,10 @@ export const MindMapCanvas: React.FC = () => {
       touchPanRef.current = null;
       touchStartRef.current = null;
     }
-  }, [panX, panY, zoom, selectedNodeId, setContextMenu]);
+  }, [panX, panY, zoom, selectedNodeId, setContextMenu, map]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
-    if ((e.target as HTMLElement).closest('.node-wrapper')) return;
 
     const touches = e.touches;
 
@@ -300,6 +321,19 @@ export const MindMapCanvas: React.FC = () => {
         clearTimeout(longPressTimerRef.current);
         longPressTimerRef.current = null;
       }
+    }
+
+    // Node drag takes priority
+    if (nodeDragRef.current && touches.length === 1) {
+      const dr = nodeDragRef.current;
+      const t = touches[0];
+      const dx = t.clientX - dr.startClientX;
+      const dy = t.clientY - dr.startClientY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        dr.dragged = true;
+        updateNodePosition(dr.nodeId, dr.startWorldX + dx / zoom, dr.startWorldY + dy / zoom);
+      }
+      return;
     }
 
     if (touches.length === 1 && touchPanRef.current) {
@@ -319,15 +353,61 @@ export const MindMapCanvas: React.FC = () => {
       setZoom(newZoom);
       setPan(midX - (midX - panX) * (newZoom / zoom), midY - (midY - panY) * (newZoom / zoom));
     }
-  }, [panX, panY, zoom, setPan, setZoom]);
+  }, [panX, panY, zoom, setPan, setZoom, updateNodePosition]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if ((e.target as HTMLElement).closest('.node-wrapper')) return;
-
     // Cancel long press
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
+    }
+
+    // Handle node drag/tap end
+    if (nodeDragRef.current) {
+      const dr = nodeDragRef.current;
+      const t = e.changedTouches[0];
+
+      if (!dr.dragged && touchStartRef.current) {
+        // Tap on node: select or double-tap to edit
+        const dt = Date.now() - touchStartRef.current.time;
+        if (dt < 300) {
+          if (lastTapRef.current) {
+            const tapDt = Date.now() - lastTapRef.current.time;
+            const tapDx = t.clientX - lastTapRef.current.x;
+            const tapDy = t.clientY - lastTapRef.current.y;
+            if (tapDt < 400 && Math.sqrt(tapDx * tapDx + tapDy * tapDy) < 30) {
+              // Double tap → start editing
+              setSelectedNode(dr.nodeId);
+              setEditingNode(dr.nodeId);
+              lastTapRef.current = null;
+              nodeDragRef.current = null;
+              touchStartRef.current = null;
+              return;
+            }
+          }
+          // Single tap → select
+          setSelectedNode(dr.nodeId);
+          setEditingNode(null);
+          lastTapRef.current = { time: Date.now(), x: t.clientX, y: t.clientY };
+        }
+      } else if (dr.dragged && map) {
+        // Check reparent on drop
+        const worldX = (t.clientX - panX) / zoom;
+        const worldY = (t.clientY - panY) / zoom;
+        for (const node of Object.values(map.nodes)) {
+          if (node.id === dr.nodeId) continue;
+          const dist = Math.sqrt(
+            Math.pow(node.position.x - worldX, 2) + Math.pow(node.position.y - worldY, 2)
+          );
+          if (dist < 60) { moveNode(dr.nodeId, node.id); break; }
+        }
+      }
+
+      nodeDragRef.current = null;
+      touchStartRef.current = null;
+      touchPanRef.current = null;
+      pinchRef.current = null;
+      return;
     }
 
     if (e.changedTouches.length === 1 && touchStartRef.current) {
@@ -368,7 +448,7 @@ export const MindMapCanvas: React.FC = () => {
     touchStartRef.current = null;
     touchPanRef.current = null;
     pinchRef.current = null;
-  }, [panX, panY, zoom, addStickyNote, setSelectedNode, setEditingNode, setSelectedConnector, setContextMenu]);
+  }, [panX, panY, zoom, addStickyNote, setSelectedNode, setEditingNode, setSelectedConnector, setContextMenu, map, moveNode]);
 
   // Keyboard shortcuts
   useEffect(() => {

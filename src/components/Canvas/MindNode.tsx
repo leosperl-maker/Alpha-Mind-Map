@@ -108,6 +108,7 @@ export const MindNode: React.FC<MindNodeProps> = ({
   return (
     <div
       className="node-wrapper"
+      data-node-id={node.id}
       style={{ left: node.position.x, top: node.position.y }}
       onMouseEnter={() => setHoveredNode(node.id)}
       onMouseLeave={() => setHoveredNode(null)}
