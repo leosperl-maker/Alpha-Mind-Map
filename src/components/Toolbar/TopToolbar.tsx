@@ -163,20 +163,37 @@ export const TopToolbar: React.FC = () => {
 };
 
 const Logo: React.FC = () => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-      <circle cx="14" cy="14" r="14" fill="#6C5CE7" />
-      <circle cx="14" cy="14" r="4" fill="white" />
-      <line x1="14" y1="10" x2="7" y2="5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="14" y1="10" x2="21" y2="5" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="14" y1="18" x2="7" y2="23" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="14" y1="18" x2="21" y2="23" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="10" y1="14" x2="4" y2="14" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="18" y1="14" x2="24" y2="14" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    {/* Aperture icon — 6-blade camera iris with Alpha/A triangle highlight */}
+    <svg width="34" height="34" viewBox="0 0 100 100" fill="none">
+      <defs>
+        <clipPath id="logo-clip">
+          <circle cx="50" cy="50" r="50" />
+        </clipPath>
+      </defs>
+      <circle cx="50" cy="50" r="50" fill="#7C5CE7" />
+      {/* Upward inscribed triangle: subtle highlight for Alpha symbol */}
+      <polygon points="50,3 90.7,73.5 9.3,73.5" fill="white" opacity="0.18" clipPath="url(#logo-clip)" />
+      {/* 6 aperture blade chord lines */}
+      <line x1="50" y1="3" x2="90.7" y2="73.5" stroke="white" strokeWidth="4" strokeLinecap="round" clipPath="url(#logo-clip)" />
+      <line x1="90.7" y1="26.5" x2="50" y2="97" stroke="white" strokeWidth="4" strokeLinecap="round" clipPath="url(#logo-clip)" />
+      <line x1="90.7" y1="73.5" x2="9.3" y2="73.5" stroke="white" strokeWidth="4" strokeLinecap="round" clipPath="url(#logo-clip)" />
+      <line x1="50" y1="97" x2="9.3" y2="26.5" stroke="white" strokeWidth="4" strokeLinecap="round" clipPath="url(#logo-clip)" />
+      <line x1="9.3" y1="73.5" x2="50" y2="3" stroke="white" strokeWidth="4" strokeLinecap="round" clipPath="url(#logo-clip)" />
+      <line x1="9.3" y1="26.5" x2="90.7" y2="26.5" stroke="white" strokeWidth="4" strokeLinecap="round" clipPath="url(#logo-clip)" />
     </svg>
-    <span style={{ fontSize: 15, fontWeight: 700, color: '#2D3436', letterSpacing: '-0.3px' }}>
-      Alpha Mind Map
-    </span>
+    {/* Brand text: ALPHA (black) MIND (purple) MAP (black) */}
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 0, lineHeight: 1 }}>
+      <span style={{ fontSize: 16, fontWeight: 900, color: '#111', fontFamily: '"Arial Black", "Helvetica Neue", Arial, sans-serif', letterSpacing: '0.5px' }}>
+        ALPHA&nbsp;
+      </span>
+      <span style={{ fontSize: 16, fontWeight: 900, color: '#7C5CE7', fontFamily: '"Arial Black", "Helvetica Neue", Arial, sans-serif', letterSpacing: '0.5px' }}>
+        MIND&nbsp;
+      </span>
+      <span style={{ fontSize: 16, fontWeight: 900, color: '#111', fontFamily: '"Arial Black", "Helvetica Neue", Arial, sans-serif', letterSpacing: '0.5px' }}>
+        MAP
+      </span>
+    </div>
   </div>
 );
 
