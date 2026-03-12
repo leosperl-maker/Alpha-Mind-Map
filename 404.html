@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Alpha Mind Map</title>
+    <script>
+      // GitHub Pages SPA redirect: preserve the full path as a query param
+      var base = '/Alpha-Mind-Map';
+      var path = window.location.pathname.replace(base, '');
+      var search = window.location.search;
+      var hash = window.location.hash;
+      var redirectUrl = window.location.origin + base + '/?p=' + encodeURIComponent(path + search) + hash;
+      window.location.replace(redirectUrl);
+    </script>
+  </head>
+  <body></body>
+</html>
