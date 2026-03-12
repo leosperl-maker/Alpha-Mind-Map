@@ -10,8 +10,9 @@ export const TopToolbar: React.FC = () => {
   const renameMap = useMapStore(s => s.renameMap);
   const undo = useMapStore(s => s.undo);
   const redo = useMapStore(s => s.redo);
+  const addRootNode = useMapStore(s => s.addRootNode);
 
-  const { view, setView, activePanel, setActivePanel, showMinimap, toggleMinimap } = useUIStore();
+  const { view, setView, activePanel, setActivePanel, showMinimap, toggleMinimap, saveStatus, searchOpen, setSearchOpen } = useUIStore();
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
 
@@ -24,9 +25,7 @@ export const TopToolbar: React.FC = () => {
   };
 
   const handleTitleBlur = () => {
-    if (map && titleDraft.trim()) {
-      renameMap(map.id, titleDraft.trim());
-    }
+    if (map && titleDraft.trim()) renameMap(map.id, titleDraft.trim());
     setEditingTitle(false);
   };
 
@@ -44,16 +43,9 @@ export const TopToolbar: React.FC = () => {
   if (view === 'dashboard') {
     return (
       <div style={{
-        height: 56,
-        background: '#fff',
-        borderBottom: '1px solid #DFE6E9',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 20px',
-        gap: 16,
-        zIndex: 50,
-        position: 'relative',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+        height: 56, background: '#fff', borderBottom: '1px solid #DFE6E9',
+        display: 'flex', alignItems: 'center', padding: '0 20px', gap: 16,
+        zIndex: 50, position: 'relative', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
       }}>
         <Logo />
         <div style={{ flex: 1 }} />
@@ -64,29 +56,13 @@ export const TopToolbar: React.FC = () => {
 
   return (
     <div style={{
-      height: 56,
-      background: '#fff',
-      borderBottom: '1px solid #DFE6E9',
-      display: 'flex',
-      alignItems: 'center',
-      padding: '0 16px',
-      gap: 8,
-      zIndex: 50,
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
+      height: 56, background: '#fff', borderBottom: '1px solid #DFE6E9',
+      display: 'flex', alignItems: 'center', padding: '0 16px', gap: 8,
+      zIndex: 50, position: 'fixed', top: 0, left: 0, right: 0,
       boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
     }}>
-      {/* Left: Logo + back + title */}
-      <button
-        onClick={() => setView('dashboard')}
-        style={iconBtnStyle}
-        title="Back to dashboard"
-        aria-label="Back to dashboard"
-      >
-        ←
-      </button>
+      {/* Left */}
+      <button onClick={() => setView('dashboard')} style={iconBtnStyle} title="Back to dashboard" aria-label="Back to dashboard">←</button>
       <Logo />
 
       <div style={{ width: 1, height: 28, background: '#DFE6E9', margin: '0 4px' }} />
@@ -99,34 +75,30 @@ export const TopToolbar: React.FC = () => {
           onBlur={handleTitleBlur}
           onKeyDown={handleTitleKeyDown}
           style={{
-            border: 'none',
-            outline: '1px solid ' + ALPHA_COLORS.primary,
-            borderRadius: 4,
-            padding: '3px 8px',
-            fontSize: 14,
-            fontWeight: 600,
-            color: '#2D3436',
-            minWidth: 160,
+            border: 'none', outline: '1px solid ' + ALPHA_COLORS.primary,
+            borderRadius: 4, padding: '3px 8px', fontSize: 14, fontWeight: 600,
+            color: '#2D3436', minWidth: 160,
           }}
         />
       ) : (
         <button
           onClick={handleTitleClick}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'text',
-            fontSize: 14,
-            fontWeight: 600,
-            color: '#2D3436',
-            padding: '3px 8px',
-            borderRadius: 4,
-          }}
+          style={{ background: 'none', border: 'none', cursor: 'text', fontSize: 14, fontWeight: 600, color: '#2D3436', padding: '3px 8px', borderRadius: 4 }}
           title="Click to rename"
         >
           {map?.title || 'Untitled'}
         </button>
       )}
+
+      {/* Save status */}
+      <span style={{
+        fontSize: 11,
+        color: saveStatus === 'saved' ? '#00B894' : saveStatus === 'saving' ? '#FDCB6E' : '#636E72',
+        marginLeft: 2,
+        minWidth: 44,
+      }}>
+        {saveStatus === 'saved' ? '✓ Saved' : saveStatus === 'saving' ? '⟳ Saving' : '● Unsaved'}
+      </span>
 
       {/* Center tabs */}
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: 4 }}>
@@ -137,54 +109,54 @@ export const TopToolbar: React.FC = () => {
             style={{
               background: activePanel === tab.key ? ALPHA_COLORS.primary : 'transparent',
               color: activePanel === tab.key ? '#fff' : '#636E72',
-              border: 'none',
-              borderRadius: 20,
-              padding: '5px 16px',
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: 'pointer',
-              transition: 'all 150ms',
+              border: 'none', borderRadius: 20, padding: '5px 16px',
+              fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all 150ms',
             }}
-          >
-            {tab.label}
-          </button>
+          >{tab.label}</button>
         ))}
       </div>
 
-      {/* Right: actions */}
+      {/* Right actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <button onClick={undo} style={iconBtnStyle} title="Undo (Ctrl+Z)" aria-label="Undo">
-          ↩
-        </button>
-        <button onClick={redo} style={iconBtnStyle} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
-          ↪
-        </button>
+        <button onClick={undo} style={iconBtnStyle} title="Undo (Ctrl+Z)" aria-label="Undo">↩</button>
+        <button onClick={redo} style={iconBtnStyle} title="Redo (Ctrl+Y)" aria-label="Redo">↪</button>
         <button
           onClick={toggleMinimap}
           style={{ ...iconBtnStyle, color: showMinimap ? ALPHA_COLORS.primary : '#636E72' }}
           title="Toggle minimap"
           aria-label="Toggle minimap"
-        >
-          ⊟
-        </button>
+        >⊟</button>
+        <button
+          onClick={() => setSearchOpen(!searchOpen)}
+          style={{ ...iconBtnStyle, color: searchOpen ? ALPHA_COLORS.primary : '#636E72' }}
+          title="Search nodes (Ctrl+F)"
+          aria-label="Search"
+        >🔍</button>
 
-        <div style={{ width: 1, height: 28, background: '#DFE6E9', margin: '0 4px' }} />
+        <div style={{ width: 1, height: 28, background: '#DFE6E9', margin: '0 2px' }} />
+
+        <button
+          onClick={() => addRootNode()}
+          style={iconBtnStyle}
+          title="Add new root topic"
+          aria-label="Add root node"
+        >⊕</button>
+        <button
+          onClick={() => setActivePanel('export')}
+          style={iconBtnStyle}
+          title="Export / Import"
+          aria-label="Export / Import"
+        >↑↓</button>
+
+        <div style={{ width: 1, height: 28, background: '#DFE6E9', margin: '0 2px' }} />
 
         <button
           onClick={() => setActivePanel('share')}
           style={{
-            background: ALPHA_COLORS.primary,
-            color: '#fff',
-            border: 'none',
-            borderRadius: 20,
-            padding: '6px 18px',
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
+            background: ALPHA_COLORS.primary, color: '#fff', border: 'none',
+            borderRadius: 20, padding: '6px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
           }}
-        >
-          Share
-        </button>
+        >Share</button>
       </div>
     </div>
   );
@@ -209,16 +181,7 @@ const Logo: React.FC = () => (
 );
 
 const iconBtnStyle: React.CSSProperties = {
-  width: 32,
-  height: 32,
-  background: 'none',
-  border: '1px solid #DFE6E9',
-  borderRadius: 6,
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: 16,
-  color: '#636E72',
-  transition: 'background 120ms',
+  width: 32, height: 32, background: 'none', border: '1px solid #DFE6E9',
+  borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center',
+  justifyContent: 'center', fontSize: 16, color: '#636E72', transition: 'background 120ms',
 };

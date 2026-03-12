@@ -9,6 +9,7 @@ interface MindNodeProps {
   node: MindMapNode;
   isRoot: boolean;
   isSelected: boolean;
+  isMultiSelected: boolean;
   isEditing: boolean;
   mapStyle: MapStyle;
   themeColor: string;
@@ -17,22 +18,15 @@ interface MindNodeProps {
   onDoubleClick: (id: string) => void;
   onAddChild: (id: string) => void;
   onDragStart: (id: string, e: React.MouseEvent) => void;
+  onContextMenu: (id: string, e: React.MouseEvent) => void;
 }
 
 const FONT_SIZE_MAP = { xs: 11, s: 12, m: 14, l: 17, xl: 21 };
 
 export const MindNode: React.FC<MindNodeProps> = ({
-  node,
-  isRoot,
-  isSelected,
-  isEditing,
-  mapStyle,
-  themeColor,
-  depth,
-  onSelect,
-  onDoubleClick,
-  onAddChild,
-  onDragStart,
+  node, isRoot, isSelected, isMultiSelected, isEditing,
+  mapStyle, themeColor, depth,
+  onSelect, onDoubleClick, onAddChild, onDragStart, onContextMenu,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { setEditingNode, setHoveredNode, hoveredNodeId } = useUIStore();
@@ -51,23 +45,17 @@ export const MindNode: React.FC<MindNodeProps> = ({
 
   const handleTextChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     updateNodeText(node.id, e.target.value);
-    // Auto-resize
     e.target.style.height = 'auto';
     e.target.style.height = e.target.scrollHeight + 'px';
   }, [node.id, updateNodeText]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      setEditingNode(null);
-    }
-    if (e.key === 'Escape') {
-      setEditingNode(null);
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); setEditingNode(null); }
+    if (e.key === 'Escape') setEditingNode(null);
     e.stopPropagation();
   }, [setEditingNode]);
 
-  // Determine colors based on style
+  // Resolve colors
   let fillColor: string;
   let textColor: string;
   let borderColor: string;
@@ -81,44 +69,41 @@ export const MindNode: React.FC<MindNodeProps> = ({
   } else if (mapStyle === 'productive') {
     const lc = getLevelColor(depth);
     fillColor = hexToRgba(lc, 0.15);
-    textColor = '#2D3436';
+    textColor = node.style.textColor || '#2D3436';
     borderColor = lc;
     borderWidth = 1.5;
   } else if (mapStyle === 'simple') {
     fillColor = 'transparent';
-    textColor = '#2D3436';
+    textColor = node.style.textColor || '#2D3436';
     borderColor = 'transparent';
     borderWidth = 0;
   } else {
-    // bubbles (default)
     if (isRoot) {
       fillColor = themeColor;
-      textColor = '#ffffff';
+      textColor = node.style.textColor || '#ffffff';
       borderColor = themeColor;
       borderWidth = 0;
     } else {
       fillColor = '#ffffff';
-      textColor = '#2D3436';
+      textColor = node.style.textColor || '#2D3436';
       borderColor = '#DFE6E9';
       borderWidth = 1.5;
     }
   }
 
-  if (isSelected) {
-    borderColor = themeColor;
+  // Override text color if explicitly set (always)
+  if (node.style.textColor) textColor = node.style.textColor;
+
+  if (isSelected || isMultiSelected) {
+    borderColor = isMultiSelected ? '#00B894' : themeColor;
     borderWidth = 2;
   }
 
-  const shapeMap = {
-    rounded: '8px',
-    rectangle: '0px',
-    pill: '999px',
-    circle: '50%',
-  };
+  const shapeMap = { rounded: '8px', rectangle: '0px', pill: '999px', circle: '50%' };
   const borderRadius = shapeMap[node.style.shape] || '8px';
-
   const hasChildren = node.childrenIds.length > 0;
   const hasNote = node.content.note.trim().length > 0;
+  const hasAttachments = node.content.attachments.length > 0;
 
   return (
     <div
@@ -127,7 +112,6 @@ export const MindNode: React.FC<MindNodeProps> = ({
       onMouseEnter={() => setHoveredNode(node.id)}
       onMouseLeave={() => setHoveredNode(null)}
     >
-      {/* Main node */}
       <div
         role="button"
         aria-label={node.content.text || 'New node'}
@@ -139,9 +123,11 @@ export const MindNode: React.FC<MindNodeProps> = ({
           border: `${borderWidth}px solid ${borderColor}`,
           borderRadius,
           boxShadow: isSelected
-            ? `0 0 0 2px ${hexToRgba(themeColor, 0.3)}, 0 2px 8px rgba(0,0,0,0.1)`
+            ? `0 0 0 2px ${hexToRgba(themeColor, 0.3)}, 0 2px 10px rgba(0,0,0,0.12)`
+            : isMultiSelected
+            ? `0 0 0 2px rgba(0,184,148,0.4), 0 2px 8px rgba(0,0,0,0.1)`
             : isHovered
-            ? '0 2px 12px rgba(0,0,0,0.12)'
+            ? '0 3px 14px rgba(0,0,0,0.14)'
             : '0 1px 4px rgba(0,0,0,0.06)',
           cursor: isEditing ? 'text' : 'grab',
           display: 'flex',
@@ -150,10 +136,12 @@ export const MindNode: React.FC<MindNodeProps> = ({
           padding: '8px 14px',
           transition: 'box-shadow 120ms ease, border-color 120ms ease',
           position: 'relative',
+          userSelect: 'none',
         }}
         onClick={(e) => { if (!isEditing) onSelect(node.id, e); }}
         onDoubleClick={() => onDoubleClick(node.id)}
-        onMouseDown={(e) => { if (!isEditing) onDragStart(node.id, e); }}
+        onMouseDown={(e) => { if (!isEditing) { e.stopPropagation(); onDragStart(node.id, e); } }}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(node.id, e); }}
       >
         {isEditing ? (
           <textarea
@@ -172,98 +160,73 @@ export const MindNode: React.FC<MindNodeProps> = ({
             }}
           />
         ) : (
-          <span
-            style={{
-              fontSize,
-              fontWeight: node.style.fontWeight === 'bold' ? 700 : 400,
-              color: textColor,
-              lineHeight: 1.4,
-              wordBreak: 'break-word',
-              textAlign: 'center',
-              whiteSpace: node.content.text ? 'pre-wrap' : 'nowrap',
-              opacity: node.content.text ? 1 : 0.4,
-            }}
-          >
+          <span style={{
+            fontSize,
+            fontWeight: node.style.fontWeight === 'bold' ? 700 : 400,
+            color: textColor,
+            lineHeight: 1.4,
+            wordBreak: 'break-word',
+            textAlign: 'center',
+            whiteSpace: node.content.text ? 'pre-wrap' : 'nowrap',
+            opacity: node.content.text ? 1 : 0.4,
+          }}>
             {node.content.text || 'New node'}
           </span>
         )}
 
-        {/* Note indicator */}
-        {hasNote && (
-          <div
-            style={{
-              position: 'absolute',
-              top: -4,
-              right: -4,
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              backgroundColor: '#00B894',
-              border: '1.5px solid white',
-            }}
-            title="Has note"
-          />
-        )}
+        {/* Badges */}
+        <div style={{ position: 'absolute', top: -4, right: -4, display: 'flex', gap: 3 }}>
+          {hasNote && (
+            <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#00B894', border: '1.5px solid white' }} title="Has note" />
+          )}
+          {hasAttachments && (
+            <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#FDCB6E', border: '1.5px solid white' }} title="Has attachments" />
+          )}
+        </div>
       </div>
 
-      {/* Collapse/Expand indicator */}
+      {/* Collapse/Expand */}
       {hasChildren && (
         <button
           onClick={(e) => { e.stopPropagation(); toggleCollapse(node.id); }}
           style={{
             position: 'absolute',
-            right: node.position.x > 0 ? -10 : 'auto',
-            left: node.position.x <= 0 ? -10 : 'auto',
+            right: node.position.side !== 'left' ? -10 : 'auto',
+            left: node.position.side === 'left' ? -10 : 'auto',
             top: '50%',
             transform: 'translateY(-50%)',
-            width: 16,
-            height: 16,
-            borderRadius: '50%',
-            background: '#fff',
-            border: `1.5px solid ${themeColor}`,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 10,
-            color: themeColor,
-            zIndex: 10,
-            lineHeight: 1,
+            width: 16, height: 16, borderRadius: '50%',
+            background: '#fff', border: `1.5px solid ${themeColor}`,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 10, color: themeColor, zIndex: 10, lineHeight: 1,
           }}
+          onMouseDown={e => e.stopPropagation()}
           aria-label={node.position.collapsed ? 'Expand' : 'Collapse'}
-          title={node.position.collapsed ? 'Expand' : 'Collapse'}
         >
           {node.position.collapsed ? '+' : '−'}
         </button>
       )}
 
       {/* Add child button */}
-      {(isHovered || isSelected) && !isEditing && (
+      {(isHovered || isSelected) && !isEditing && !node.position.collapsed && (
         <button
           onClick={(e) => { e.stopPropagation(); onAddChild(node.id); }}
+          onMouseDown={e => e.stopPropagation()}
           style={{
             position: 'absolute',
-            right: -24,
+            right: node.position.side !== 'left' ? -26 : 'auto',
+            left: node.position.side === 'left' ? -26 : 'auto',
             top: '50%',
             transform: 'translateY(-50%)',
-            width: 20,
-            height: 20,
-            borderRadius: '50%',
-            background: '#636E72',
-            border: 'none',
-            cursor: 'pointer',
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 14,
-            lineHeight: 1,
-            zIndex: 10,
-            opacity: 0.75,
-            transition: 'opacity 120ms',
+            width: 22, height: 22, borderRadius: '50%',
+            background: themeColor, border: 'none', cursor: 'pointer',
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16, lineHeight: 1, zIndex: 10, opacity: 0.8,
+            transition: 'opacity 120ms, transform 120ms',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
           }}
-          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-          onMouseLeave={e => (e.currentTarget.style.opacity = '0.75')}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.transform = 'translateY(-50%) scale(1)'; }}
           title="Add child node (Tab)"
           aria-label="Add child node"
         >

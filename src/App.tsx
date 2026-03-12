@@ -3,10 +3,14 @@ import { useUIStore } from './store/uiStore';
 import { useMapStore } from './store/mapStore';
 import { TopToolbar } from './components/Toolbar/TopToolbar';
 import { NodeToolbar } from './components/Toolbar/NodeToolbar';
+import { ConnectorToolbar } from './components/Toolbar/ConnectorToolbar';
 import { MindMapCanvas } from './components/Canvas/MindMapCanvas';
 import { PersonalizePanel } from './components/Panels/PersonalizePanel';
 import { NotesPanel } from './components/Panels/NotesPanel';
+import { ExportPanel } from './components/Panels/ExportPanel';
 import { DashboardPage } from './components/Dashboard/DashboardPage';
+import { ContextMenu } from './components/common/ContextMenu';
+import { SearchBar } from './components/common/SearchBar';
 
 function App() {
   const view = useUIStore(s => s.view);
@@ -17,7 +21,6 @@ function App() {
   useEffect(() => {
     if (maps.length === 0) {
       const id = createMap('My First Mind Map');
-      // Add some demo nodes
       setTimeout(() => {
         const { addNode, maps: currentMaps } = useMapStore.getState();
         const map = currentMaps.find(m => m.id === id);
@@ -74,9 +77,13 @@ function App() {
     <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative' }}>
       <TopToolbar />
       <NodeToolbar />
+      <ConnectorToolbar />
       <MindMapCanvas />
       <PersonalizePanel />
       <NotesPanel />
+      <ExportPanel />
+      <ContextMenu />
+      <SearchBar />
     </div>
   );
 }

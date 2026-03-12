@@ -11,9 +11,10 @@ export const NodeToolbar: React.FC = () => {
   const activeMapId = useMapStore(s => s.activeMapId);
   const updateNodeStyle = useMapStore(s => s.updateNodeStyle);
   const deleteNode = useMapStore(s => s.deleteNode);
+  const colorBranch = useMapStore(s => s.colorBranch);
   const { setSelectedNode } = useUIStore();
 
-  const [showColorPicker, setShowColorPicker] = useState<'fill' | 'border' | null>(null);
+  const [showColorPicker, setShowColorPicker] = useState<'fill' | 'border' | 'text' | 'branch' | null>(null);
 
   if (!selectedNodeId || editingNodeId) return null;
 
@@ -23,7 +24,7 @@ export const NodeToolbar: React.FC = () => {
   const node = map.nodes[selectedNodeId];
   if (!node) return null;
 
-  const isRoot = selectedNodeId === map.rootNodeId;
+  const isRoot = (map.rootNodeIds || [map.rootNodeId]).includes(selectedNodeId);
   const style = node.style;
 
   const set = (s: Partial<NodeStyle>) => updateNodeStyle(selectedNodeId, s);
@@ -70,10 +71,8 @@ export const NodeToolbar: React.FC = () => {
           style={{
             ...toolBtnStyle,
             background: style.fillColor || '#F8F9FA',
-            border: `2px solid ${style.fillColor ? style.fillColor : '#DFE6E9'}`,
-            width: 24,
-            height: 24,
-            borderRadius: 4,
+            border: `2px solid ${style.fillColor || '#DFE6E9'}`,
+            width: 24, height: 24, borderRadius: 4,
           }}
           title="Fill color"
           aria-label="Fill color"
@@ -95,9 +94,7 @@ export const NodeToolbar: React.FC = () => {
             ...toolBtnStyle,
             background: '#fff',
             border: `3px solid ${style.borderColor || '#DFE6E9'}`,
-            width: 24,
-            height: 24,
-            borderRadius: 4,
+            width: 24, height: 24, borderRadius: 4,
           }}
           title="Border color"
           aria-label="Border color"
@@ -106,6 +103,31 @@ export const NodeToolbar: React.FC = () => {
           <ColorPicker
             onSelect={c => { set({ borderColor: c }); setShowColorPicker(null); }}
             onClear={() => { set({ borderColor: null }); setShowColorPicker(null); }}
+            onClose={() => setShowColorPicker(null)}
+          />
+        )}
+      </div>
+
+      {/* Text color — BUG 5 FIX */}
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => setShowColorPicker(showColorPicker === 'text' ? null : 'text')}
+          style={{
+            ...toolBtnStyle,
+            background: 'none',
+            border: `2px solid ${style.textColor || '#DFE6E9'}`,
+            width: 24, height: 24, borderRadius: 4,
+            fontSize: 12, fontWeight: 700,
+            color: style.textColor || '#2D3436',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          title="Text color"
+          aria-label="Text color"
+        >T</button>
+        {showColorPicker === 'text' && (
+          <ColorPicker
+            onSelect={c => { set({ textColor: c }); setShowColorPicker(null); }}
+            onClear={() => { set({ textColor: null }); setShowColorPicker(null); }}
             onClose={() => setShowColorPicker(null)}
           />
         )}
@@ -122,14 +144,10 @@ export const NodeToolbar: React.FC = () => {
             ...toolBtnStyle,
             background: style.shape === s.key ? ALPHA_COLORS.primary : 'transparent',
             color: style.shape === s.key ? '#fff' : '#636E72',
-            fontSize: 13,
-            padding: '3px 8px',
-            borderRadius: 4,
+            fontSize: 13, padding: '3px 8px', borderRadius: 4,
           }}
           title={s.key}
-        >
-          {s.label}
-        </button>
+        >{s.label}</button>
       ))}
 
       <Divider />
@@ -144,14 +162,10 @@ export const NodeToolbar: React.FC = () => {
             background: style.fontSize === fs ? ALPHA_COLORS.primary : 'transparent',
             color: style.fontSize === fs ? '#fff' : '#636E72',
             fontSize: fs === 'xs' ? 9 : fs === 's' ? 11 : fs === 'm' ? 13 : fs === 'l' ? 15 : 18,
-            padding: '2px 5px',
-            borderRadius: 4,
-            minWidth: 22,
+            padding: '2px 5px', borderRadius: 4, minWidth: 22,
           }}
           title={`Font size: ${fs.toUpperCase()}`}
-        >
-          A
-        </button>
+        >A</button>
       ))}
 
       {/* Bold */}
@@ -161,14 +175,10 @@ export const NodeToolbar: React.FC = () => {
           ...toolBtnStyle,
           background: style.fontWeight === 'bold' ? ALPHA_COLORS.primary : 'transparent',
           color: style.fontWeight === 'bold' ? '#fff' : '#636E72',
-          fontWeight: 700,
-          padding: '2px 8px',
-          borderRadius: 4,
+          fontWeight: 700, padding: '2px 8px', borderRadius: 4,
         }}
         title="Bold"
-      >
-        B
-      </button>
+      >B</button>
 
       <Divider />
 
@@ -181,33 +191,44 @@ export const NodeToolbar: React.FC = () => {
             ...toolBtnStyle,
             background: style.connectorStyle === c.key ? ALPHA_COLORS.primary : 'transparent',
             color: style.connectorStyle === c.key ? '#fff' : '#636E72',
-            fontSize: 12,
-            padding: '2px 6px',
-            borderRadius: 4,
+            fontSize: 12, padding: '2px 6px', borderRadius: 4,
           }}
           title={c.key}
-        >
-          {c.label}
-        </button>
+        >{c.label}</button>
       ))}
+
+      <Divider />
+
+      {/* Color branch — FEAT 4 */}
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => setShowColorPicker(showColorPicker === 'branch' ? null : 'branch')}
+          style={{
+            ...toolBtnStyle,
+            background: 'transparent',
+            color: '#636E72',
+            fontSize: 14, padding: '2px 6px', borderRadius: 4,
+            border: '1px solid #DFE6E9',
+          }}
+          title="Color branch"
+        >🎨</button>
+        {showColorPicker === 'branch' && (
+          <BranchColorPicker
+            onSelect={c => { colorBranch(selectedNodeId, c); setShowColorPicker(null); }}
+            onClose={() => setShowColorPicker(null)}
+          />
+        )}
+      </div>
 
       {!isRoot && (
         <>
           <Divider />
           <button
             onClick={() => { deleteNode(selectedNodeId); setSelectedNode(null); }}
-            style={{
-              ...toolBtnStyle,
-              color: '#E17055',
-              padding: '2px 8px',
-              borderRadius: 4,
-              fontSize: 16,
-            }}
+            style={{ ...toolBtnStyle, color: '#E17055', padding: '2px 8px', borderRadius: 4, fontSize: 16 }}
             title="Delete node (Delete)"
             aria-label="Delete node"
-          >
-            🗑
-          </button>
+          >🗑</button>
         </>
       )}
     </div>
@@ -218,71 +239,68 @@ const ColorPicker: React.FC<{
   onSelect: (c: string) => void;
   onClear: () => void;
   onClose: () => void;
-}> = ({ onSelect, onClear, onClose }) => {
-  return (
-    <div
-      className="panel-enter"
-      style={{
-        position: 'absolute',
-        top: '110%',
-        left: 0,
-        background: '#fff',
-        border: '1px solid #DFE6E9',
-        borderRadius: 8,
-        padding: 8,
-        boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-        zIndex: 50,
-        display: 'grid',
-        gridTemplateColumns: 'repeat(5, 20px)',
-        gap: 4,
-      }}
-      onClick={e => e.stopPropagation()}
-    >
-      {NODE_PALETTE.map(c => (
-        <button
-          key={c}
-          onClick={() => onSelect(c)}
-          style={{
-            width: 20,
-            height: 20,
-            borderRadius: 4,
-            background: c,
-            border: '1px solid rgba(0,0,0,0.1)',
-            cursor: 'pointer',
-            padding: 0,
-          }}
-          title={c}
-          aria-label={c}
-        />
-      ))}
+}> = ({ onSelect, onClear, onClose }) => (
+  <div
+    className="panel-enter"
+    style={{
+      position: 'absolute', top: '110%', left: 0,
+      background: '#fff', border: '1px solid #DFE6E9',
+      borderRadius: 8, padding: 8,
+      boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+      zIndex: 50, display: 'grid',
+      gridTemplateColumns: 'repeat(5, 20px)', gap: 4,
+    }}
+    onClick={e => e.stopPropagation()}
+  >
+    {NODE_PALETTE.map(c => (
       <button
-        onClick={onClear}
-        style={{
-          width: 20,
-          height: 20,
-          borderRadius: 4,
-          background: '#F8F9FA',
-          border: '1px dashed #DFE6E9',
-          cursor: 'pointer',
-          fontSize: 10,
-          color: '#636E72',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 0,
-        }}
-        title="Clear"
-      >
-        ✕
-      </button>
-      <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #DFE6E9', paddingTop: 4, display: 'flex', justifyContent: 'flex-end' }}>
-        <button onClick={onClose} style={{ fontSize: 10, color: '#636E72', background: 'none', border: 'none', cursor: 'pointer' }}>
-          Close
-        </button>
-      </div>
+        key={c}
+        onClick={() => onSelect(c)}
+        style={{ width: 20, height: 20, borderRadius: 4, background: c, border: '1px solid rgba(0,0,0,0.1)', cursor: 'pointer', padding: 0 }}
+        title={c}
+        aria-label={c}
+      />
+    ))}
+    <button
+      onClick={onClear}
+      style={{ width: 20, height: 20, borderRadius: 4, background: '#F8F9FA', border: '1px dashed #DFE6E9', cursor: 'pointer', fontSize: 10, color: '#636E72', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+      title="Clear"
+    >✕</button>
+    <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #DFE6E9', paddingTop: 4, display: 'flex', justifyContent: 'flex-end' }}>
+      <button onClick={onClose} style={{ fontSize: 10, color: '#636E72', background: 'none', border: 'none', cursor: 'pointer' }}>Close</button>
     </div>
-  );
-};
+  </div>
+);
+
+const BranchColorPicker: React.FC<{
+  onSelect: (c: string) => void;
+  onClose: () => void;
+}> = ({ onSelect, onClose }) => (
+  <div
+    className="panel-enter"
+    style={{
+      position: 'absolute', top: '110%', left: 0,
+      background: '#fff', border: '1px solid #DFE6E9',
+      borderRadius: 8, padding: 8,
+      boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+      zIndex: 50, display: 'grid',
+      gridTemplateColumns: 'repeat(5, 20px)', gap: 4,
+    }}
+    onClick={e => e.stopPropagation()}
+  >
+    <div style={{ gridColumn: '1 / -1', fontSize: 10, color: '#636E72', marginBottom: 4 }}>Color entire branch</div>
+    {NODE_PALETTE.map(c => (
+      <button
+        key={c}
+        onClick={() => onSelect(c)}
+        style={{ width: 20, height: 20, borderRadius: 4, background: c, border: '1px solid rgba(0,0,0,0.1)', cursor: 'pointer', padding: 0 }}
+      />
+    ))}
+    <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #DFE6E9', paddingTop: 4, display: 'flex', justifyContent: 'flex-end' }}>
+      <button onClick={onClose} style={{ fontSize: 10, color: '#636E72', background: 'none', border: 'none', cursor: 'pointer' }}>Close</button>
+    </div>
+  </div>
+);
 
 const Divider: React.FC = () => (
   <div style={{ width: 1, height: 20, background: '#DFE6E9', margin: '0 2px' }} />

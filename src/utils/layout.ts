@@ -1,14 +1,13 @@
 import type { MindMapNode, MapDirection } from '../types';
 
-const H_GAP = 180;
-const V_GAP = 60;
+const H_GAP = 200;
+const V_GAP = 64;
 
 interface LayoutResult {
   id: string;
   x: number;
   y: number;
 }
-
 
 function getSubtreeHeight(
   nodeId: string,
@@ -31,18 +30,18 @@ function layoutSubtree(
   y: number,
   direction: 1 | -1,
   results: LayoutResult[]
-): number {
+): void {
   const node = nodes[nodeId];
-  if (!node) return y;
+  if (!node) return;
 
   results.push({ id: nodeId, x, y });
 
-  if (node.position.collapsed || node.childrenIds.length === 0) return y;
+  if (node.position.collapsed || node.childrenIds.length === 0) return;
 
   const childX = x + direction * H_GAP;
-  const totalHeight = getSubtreeHeight(nodeId, nodes) - 1; // subtract self
+  const totalH = node.childrenIds.reduce((s, cid) => s + getSubtreeHeight(cid, nodes), 0);
 
-  let childY = y - ((totalHeight - 1) * V_GAP) / 2;
+  let childY = y - ((totalH - 1) * V_GAP) / 2;
 
   for (const childId of node.childrenIds) {
     const subtreeH = getSubtreeHeight(childId, nodes);
@@ -50,8 +49,6 @@ function layoutSubtree(
     layoutSubtree(childId, nodes, childX, childCenter, direction, results);
     childY += subtreeH * V_GAP;
   }
-
-  return y;
 }
 
 export function computeRadialLayout(
@@ -74,39 +71,33 @@ export function computeRadialLayout(
     return results;
   }
 
-  // Default: split children left/right
-  const children = root.childrenIds;
+  // Default: use side property. New children always go RIGHT by default.
   results.push({ id: rootId, x: 0, y: 0 });
 
+  const children = root.childrenIds;
   if (children.length === 0) return results;
 
-  const rightChildren = children.filter((_, i) => i % 2 === 0);
-  const leftChildren = children.filter((_, i) => i % 2 !== 0);
+  const rightChildren = children.filter(cid => nodes[cid]?.position.side !== 'left');
+  const leftChildren  = children.filter(cid => nodes[cid]?.position.side === 'left');
 
-  // Layout right side
-  const rightTotal = rightChildren.reduce(
-    (s, cid) => s + getSubtreeHeight(cid, nodes),
-    0
-  );
-  let ry = -((rightTotal - 1) * V_GAP) / 2;
-  for (const cid of rightChildren) {
-    const h = getSubtreeHeight(cid, nodes);
-    const cy = ry + ((h - 1) * V_GAP) / 2;
-    layoutSubtree(cid, nodes, H_GAP, cy, 1, results);
-    ry += h * V_GAP;
+  if (rightChildren.length > 0) {
+    const total = rightChildren.reduce((s, c) => s + getSubtreeHeight(c, nodes), 0);
+    let ry = -((total - 1) * V_GAP) / 2;
+    for (const cid of rightChildren) {
+      const h = getSubtreeHeight(cid, nodes);
+      layoutSubtree(cid, nodes, H_GAP, ry + ((h - 1) * V_GAP) / 2, 1, results);
+      ry += h * V_GAP;
+    }
   }
 
-  // Layout left side
-  const leftTotal = leftChildren.reduce(
-    (s, cid) => s + getSubtreeHeight(cid, nodes),
-    0
-  );
-  let ly = -((leftTotal - 1) * V_GAP) / 2;
-  for (const cid of leftChildren) {
-    const h = getSubtreeHeight(cid, nodes);
-    const cy = ly + ((h - 1) * V_GAP) / 2;
-    layoutSubtree(cid, nodes, -H_GAP, cy, -1, results);
-    ly += h * V_GAP;
+  if (leftChildren.length > 0) {
+    const total = leftChildren.reduce((s, c) => s + getSubtreeHeight(c, nodes), 0);
+    let ly = -((total - 1) * V_GAP) / 2;
+    for (const cid of leftChildren) {
+      const h = getSubtreeHeight(cid, nodes);
+      layoutSubtree(cid, nodes, -H_GAP, ly + ((h - 1) * V_GAP) / 2, -1, results);
+      ly += h * V_GAP;
+    }
   }
 
   return results;

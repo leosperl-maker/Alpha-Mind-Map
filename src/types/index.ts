@@ -1,7 +1,8 @@
 export interface NodeAttachment {
-  type: 'image' | 'file' | 'link';
+  type: 'image' | 'file' | 'link' | 'video';
   url: string;
   name: string;
+  thumbnail?: string;
 }
 
 export interface NodeComment {
@@ -14,6 +15,7 @@ export interface NodeComment {
 }
 
 export type ConnectorStyle = 'curved' | 'straight' | 'dashed' | 'dotted';
+export type ConnectorWidth = 'thin' | 'normal' | 'thick';
 export type NodeShape = 'rounded' | 'rectangle' | 'pill' | 'circle';
 export type FontSize = 'xs' | 's' | 'm' | 'l' | 'xl';
 
@@ -25,6 +27,8 @@ export interface NodeStyle {
   fontWeight: 'normal' | 'bold';
   shape: NodeShape;
   connectorStyle: ConnectorStyle;
+  connectorColor: string | null;
+  connectorWidth: ConnectorWidth;
 }
 
 export interface NodeContent {
@@ -37,6 +41,8 @@ export interface NodePosition {
   x: number;
   y: number;
   collapsed: boolean;
+  side?: 'left' | 'right'; // for root-level children in default layout
+  manuallyPositioned?: boolean; // true when user dragged the node manually
 }
 
 export interface MindMapNode {
@@ -67,6 +73,8 @@ export interface StickyNote {
   x: number;
   y: number;
   color: string;
+  width: number;
+  height: number;
 }
 
 export interface MindMap {
@@ -79,6 +87,7 @@ export interface MindMap {
   tags: string[];
   settings: MapSettings;
   rootNodeId: string;
+  rootNodeIds: string[]; // support for multiple root nodes
   nodes: Record<string, MindMapNode>;
   stickyNotes: StickyNote[];
 }
@@ -86,4 +95,5 @@ export interface MindMap {
 export interface HistoryEntry {
   nodes: Record<string, MindMapNode>;
   stickyNotes: StickyNote[];
+  rootNodeIds: string[];
 }
