@@ -97,14 +97,14 @@ export const DashboardPage: React.FC = () => {
   const handleAICreateMap = async () => {
     if (!aiTopic.trim()) return;
     const settings = getAISettings();
-    if (!settings.enabled || !settings.apiKey) {
-      setAIError('Configurez votre clé API dans Paramètres > IA.');
+    if (!settings.enabled) {
+      setAIError("IA non activée. Configurez l'IA dans Paramètres > IA.");
       return;
     }
     setAILoading(true);
     setAIError('');
     try {
-      const data = await generateFullMap(aiTopic.trim(), settings.apiKey, settings.model, settings.language);
+      const data = await generateFullMap(aiTopic.trim(), settings.geminiApiKey, settings.model, settings.language);
       const wsId = (sidebarView !== 'home' && sidebarView !== 'starred' && sidebarView !== 'recents' && sidebarView !== 'trash')
         ? sidebarView
         : (activeWorkspaceId || 'personal');

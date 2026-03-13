@@ -58,10 +58,6 @@ export const ContextMenu: React.FC = () => {
   const handleAIBranches = async () => {
     close();
     const aiSettings = getAISettings();
-    if (!aiSettings.apiKey) {
-      alert('Clé API Anthropic non configurée. Allez dans Paramètres > IA pour la configurer.');
-      return;
-    }
     setAILoading(true);
     try {
       const { generateBranches } = await import('../../utils/aiService');
@@ -73,7 +69,7 @@ export const ContextMenu: React.FC = () => {
       const suggestions = await generateBranches(
         node.content.text || 'nœud',
         contextNodes,
-        aiSettings.apiKey,
+        aiSettings.geminiApiKey,
         aiSettings.model,
         aiSettings.language
       );
@@ -92,15 +88,11 @@ export const ContextMenu: React.FC = () => {
     close();
     if (!node.content.text) return;
     const aiSettings = getAISettings();
-    if (!aiSettings.apiKey) {
-      alert('Clé API Anthropic non configurée.');
-      return;
-    }
     setAILoading(true);
     try {
       const options = await improveNodeText(
         node.content.text,
-        aiSettings.apiKey,
+        aiSettings.geminiApiKey,
         aiSettings.model,
         aiSettings.language
       );

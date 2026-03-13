@@ -6,6 +6,8 @@ import { NODE_PALETTE, ALPHA_COLORS } from '../../utils/colors';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { getAISettings, generateBranches, improveNodeText } from '../../utils/aiService';
 import { v4 as uuid } from 'uuid';
+import { supabase, isMockMode } from '../../lib/supabase';
+import { useAuth } from '../../auth/AuthContext';
 
 export const NodeToolbar: React.FC = () => {
   const selectedNodeId = useUIStore(s => s.selectedNodeId);
@@ -19,6 +21,7 @@ export const NodeToolbar: React.FC = () => {
   const colorBranch = useMapStore(s => s.colorBranch);
   const { setSelectedNode, setAISuggestions, setAILoading, aiLoading, setAIImproveOptions, aiImproveOptions } = useUIStore();
   const { isMobile } = useBreakpoint();
+  const { user } = useAuth();
 
   const [showColorPicker, setShowColorPicker] = useState<'fill' | 'border' | 'text' | 'branch' | null>(null);
   const [showMediaMenu, setShowMediaMenu] = useState(false);
@@ -59,10 +62,6 @@ export const NodeToolbar: React.FC = () => {
 
   const handleAIBranches = async () => {
     const aiSettings = getAISettings();
-    if (!aiSettings.apiKey) {
-      alert('Clé API Anthropic non configurée. Allez dans Paramètres > IA pour la configurer.');
-      return;
-    }
     setShowMediaMenu(false);
     setAILoading(true);
     try {
@@ -74,7 +73,7 @@ export const NodeToolbar: React.FC = () => {
       const suggestions = await generateBranches(
         node.content.text || 'nœud',
         contextNodes,
-        aiSettings.apiKey,
+        aiSettings.geminiApiKey,
         aiSettings.model,
         aiSettings.language
       );
@@ -91,16 +90,12 @@ export const NodeToolbar: React.FC = () => {
 
   const handleAIImprove = async () => {
     const aiSettings = getAISettings();
-    if (!aiSettings.apiKey) {
-      alert('Clé API Anthropic non configurée. Allez dans Paramètres > IA pour la configurer.');
-      return;
-    }
     if (!node.content.text) return;
     setAILoading(true);
     try {
       const options = await improveNodeText(
         node.content.text,
-        aiSettings.apiKey,
+        aiSettings.geminiApiKey,
         aiSettings.model,
         aiSettings.language
       );
@@ -114,22 +109,33 @@ export const NodeToolbar: React.FC = () => {
 
   // ── Media handlers ────────────────────────────────────────────────────────────
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
+    setShowMediaMenu(false);
+
+    const existing = node.content.media || {};
+
+    // Try Supabase Storage upload if available
+    if (!isMockMode && supabase && user) {
+      const path = `attachments/${user.id}/${activeMapId}/${selectedNodeId}/${file.name}`;
+      const { error } = await supabase.storage.from('attachments').upload(path, file, { upsert: true });
+      if (!error) {
+        const { data: { publicUrl } } = supabase.storage.from('attachments').getPublicUrl(path);
+        updateNodeMedia(selectedNodeId, { ...existing, image: { type: 'url', url: publicUrl } });
+        return;
+      }
+      // Fall through to base64 if storage fails
+    }
+
+    // Fallback: base64
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target?.result as string;
-      const existing = node.content.media || {};
-      const media: NodeMedia = {
-        ...existing,
-        image: { type: 'base64', data: dataUrl },
-      };
-      updateNodeMedia(selectedNodeId, media);
+      updateNodeMedia(selectedNodeId, { ...existing, image: { type: 'base64', data: dataUrl } });
     };
     reader.readAsDataURL(file);
-    e.target.value = '';
-    setShowMediaMenu(false);
   };
 
   const handleLinkSubmit = () => {
