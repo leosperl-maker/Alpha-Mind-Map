@@ -5,7 +5,8 @@ import { MindNode } from './MindNode';
 import { Connector } from './Connector';
 import { StickyNote } from './StickyNote';
 import { Minimap } from './Minimap';
-import type { MindMapNode } from '../../types';
+import { CrossConnectorLayer } from './CrossConnectorLayer';
+import type { MindMapNode, NodeMedia } from '../../types';
 
 function getNodeDepth(nodeId: string, nodes: Record<string, MindMapNode>): number {
   let depth = 0;
@@ -34,6 +35,18 @@ function collectVisibleEdges(
   return edges;
 }
 
+/** Collect all descendant IDs of a node (inclusive) */
+function collectSubtreeIds(nodeId: string, nodes: Record<string, MindMapNode>): Set<string> {
+  const ids = new Set<string>();
+  function walk(id: string) {
+    ids.add(id);
+    const n = nodes[id];
+    if (n) n.childrenIds.forEach(walk);
+  }
+  walk(nodeId);
+  return ids;
+}
+
 function getTouchDist(touches: React.TouchList): number {
   if (touches.length < 2) return 0;
   const dx = touches[0].clientX - touches[1].clientX;
@@ -50,15 +63,17 @@ export const MindMapCanvas: React.FC = () => {
   const deleteNode = useMapStore(s => s.deleteNode);
   const moveNode = useMapStore(s => s.moveNode);
   const updateNodePosition = useMapStore(s => s.updateNodePosition);
+  const updateNodeMedia = useMapStore(s => s.updateNodeMedia);
+  const addCrossConnector = useMapStore(s => s.addCrossConnector);
   const undo = useMapStore(s => s.undo);
   const redo = useMapStore(s => s.redo);
   const addStickyNote = useMapStore(s => s.addStickyNote);
 
   const {
     zoom, panX, panY, selectedNodeId, selectedNodeIds, editingNodeId, showMinimap,
-    selectedConnectorId,
+    selectedConnectorId, focusModeNodeId, pendingCrossConnect,
     setZoom, setPan, setSelectedNode, setEditingNode, fitToScreen,
-    setSelectedConnector, setContextMenu, toggleMultiSelect,
+    setSelectedConnector, setContextMenu, toggleMultiSelect, setPendingCrossConnect,
   } = useUIStore();
 
   const map = maps.find(m => m.id === activeMapId);
@@ -68,7 +83,6 @@ export const MindMapCanvas: React.FC = () => {
   const [isPanningActive, setIsPanningActive] = useState(false);
   const [dims, setDims] = useState({ w: window.innerWidth, h: window.innerHeight });
 
-  // Node drag state
   const nodeDragRef = useRef<{
     nodeId: string;
     startClientX: number;
@@ -78,13 +92,7 @@ export const MindMapCanvas: React.FC = () => {
     dragged: boolean;
   } | null>(null);
 
-  // Touch state refs
-  const touchStartRef = useRef<{
-    x: number;
-    y: number;
-    time: number;
-    dist: number; // for pinch
-  } | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; time: number; dist: number } | null>(null);
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchPanRef = useRef<{ panX: number; panY: number; x: number; y: number } | null>(null);
@@ -113,6 +121,34 @@ export const MindMapCanvas: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMapId]);
 
+  // Paste image from clipboard
+  useEffect(() => {
+    const handler = async (e: ClipboardEvent) => {
+      if (!selectedNodeId || editingNodeId) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (!file) continue;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const dataUrl = ev.target?.result as string;
+            const currentMap = useMapStore.getState().maps.find(m => m.id === activeMapId);
+            const currentNode = currentMap?.nodes[selectedNodeId];
+            const existing: NodeMedia = currentNode?.content.media || {};
+            updateNodeMedia(selectedNodeId, { ...existing, image: { type: 'base64', data: dataUrl } });
+          };
+          reader.readAsDataURL(file);
+          break;
+        }
+      }
+    };
+    window.addEventListener('paste', handler);
+    return () => window.removeEventListener('paste', handler);
+  }, [selectedNodeId, editingNodeId, activeMapId, updateNodeMedia]);
+
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     const rect = containerRef.current!.getBoundingClientRect();
@@ -128,17 +164,17 @@ export const MindMapCanvas: React.FC = () => {
     }
   }, [zoom, panX, panY, setZoom, setPan]);
 
-  // Canvas mouseDown — only fires on empty canvas because MindNode calls stopPropagation
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest('.sticky-note')) return;
+    // If cross-connect pending, clicking canvas cancels it
+    if (pendingCrossConnect) { setPendingCrossConnect(null); return; }
     isPanning.current = true;
     setIsPanningActive(true);
     panStart.current = { x: e.clientX, y: e.clientY, panX, panY };
-  }, [panX, panY]);
+  }, [panX, panY, pendingCrossConnect, setPendingCrossConnect]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    // Node drag takes priority — stops canvas pan
     if (nodeDragRef.current) {
       const dr = nodeDragRef.current;
       const dx = e.clientX - dr.startClientX;
@@ -166,7 +202,6 @@ export const MindMapCanvas: React.FC = () => {
     if (nodeDragRef.current) {
       const dr = nodeDragRef.current;
       if (dr.dragged && map) {
-        // Check for reparent on drop
         const worldX = (e.clientX - panX) / zoom;
         const worldY = (e.clientY - panY) / zoom;
         for (const node of Object.values(map.nodes)) {
@@ -186,11 +221,12 @@ export const MindMapCanvas: React.FC = () => {
 
   const handleCanvasClick = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('.sticky-note')) return;
+    if (pendingCrossConnect) { setPendingCrossConnect(null); return; }
     setSelectedNode(null);
     setEditingNode(null);
     setSelectedConnector(null);
     setContextMenu(null);
-  }, [setSelectedNode, setEditingNode, setSelectedConnector, setContextMenu]);
+  }, [setSelectedNode, setEditingNode, setSelectedConnector, setContextMenu, pendingCrossConnect, setPendingCrossConnect]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('.sticky-note')) return;
@@ -203,13 +239,21 @@ export const MindMapCanvas: React.FC = () => {
 
   const handleNodeSelect = useCallback((nodeId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+
+    // Cross-connect mode: clicking a node completes the connection
+    if (pendingCrossConnect && pendingCrossConnect !== nodeId) {
+      addCrossConnector(pendingCrossConnect, nodeId);
+      setPendingCrossConnect(null);
+      return;
+    }
+
     if (e.ctrlKey || e.metaKey) {
       toggleMultiSelect(nodeId);
     } else {
       setSelectedNode(nodeId);
       setEditingNode(null);
     }
-  }, [setSelectedNode, setEditingNode, toggleMultiSelect]);
+  }, [setSelectedNode, setEditingNode, toggleMultiSelect, pendingCrossConnect, addCrossConnector, setPendingCrossConnect]);
 
   const handleNodeDoubleClick = useCallback((nodeId: string) => {
     setSelectedNode(nodeId);
@@ -246,18 +290,9 @@ export const MindMapCanvas: React.FC = () => {
   // ── Touch handlers ──────────────────────────────────────────────────────────
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    // Let StickyNote handle its own touch events
     if ((e.target as HTMLElement).closest('.sticky-note')) return;
-
     const touches = e.touches;
-
-    // Clear long press timer if re-touching
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-
-    // If touching a node, start node drag
+    if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
     const nodeWrapper = (e.target as HTMLElement).closest('.node-wrapper') as HTMLElement | null;
     if (nodeWrapper && touches.length === 1 && map) {
       const nodeId = nodeWrapper.dataset.nodeId;
@@ -278,14 +313,11 @@ export const MindMapCanvas: React.FC = () => {
         return;
       }
     }
-
     if (touches.length === 1) {
       const t = touches[0];
       touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now(), dist: 0 };
       touchPanRef.current = { panX, panY, x: t.clientX, y: t.clientY };
       pinchRef.current = null;
-
-      // Long press detection
       longPressTimerRef.current = setTimeout(() => {
         if (touchStartRef.current) {
           setContextMenu({ x: touchStartRef.current.x, y: touchStartRef.current.y, nodeId: selectedNodeId || '' });
@@ -293,11 +325,7 @@ export const MindMapCanvas: React.FC = () => {
         longPressTimerRef.current = null;
       }, 500);
     } else if (touches.length === 2) {
-      // Cancel long press
-      if (longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
+      if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
       const dist = getTouchDist(touches);
       const midX = (touches[0].clientX + touches[1].clientX) / 2;
       const midY = (touches[0].clientY + touches[1].clientY) / 2;
@@ -309,21 +337,13 @@ export const MindMapCanvas: React.FC = () => {
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
-
     const touches = e.touches;
-
-    // Cancel long press if moved
     if (longPressTimerRef.current && touchStartRef.current) {
       const t = touches[0];
       const dx = t.clientX - touchStartRef.current.x;
       const dy = t.clientY - touchStartRef.current.y;
-      if (Math.sqrt(dx * dx + dy * dy) > 5) {
-        clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
-      }
+      if (Math.sqrt(dx * dx + dy * dy) > 5) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
     }
-
-    // Node drag takes priority
     if (nodeDragRef.current && touches.length === 1) {
       const dr = nodeDragRef.current;
       const t = touches[0];
@@ -335,15 +355,12 @@ export const MindMapCanvas: React.FC = () => {
       }
       return;
     }
-
     if (touches.length === 1 && touchPanRef.current) {
-      // 1-finger pan
       const t = touches[0];
       const dx = t.clientX - touchPanRef.current.x;
       const dy = t.clientY - touchPanRef.current.y;
       setPan(touchPanRef.current.panX + dx, touchPanRef.current.panY + dy);
     } else if (touches.length === 2 && pinchRef.current) {
-      // 2-finger pinch zoom
       const newDist = getTouchDist(touches);
       const scale = newDist / pinchRef.current.dist;
       const newZoom = Math.max(0.2, Math.min(3, pinchRef.current.zoom * scale));
@@ -356,19 +373,11 @@ export const MindMapCanvas: React.FC = () => {
   }, [panX, panY, zoom, setPan, setZoom, updateNodePosition]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    // Cancel long press
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-
-    // Handle node drag/tap end
+    if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
     if (nodeDragRef.current) {
       const dr = nodeDragRef.current;
       const t = e.changedTouches[0];
-
       if (!dr.dragged && touchStartRef.current) {
-        // Tap on node: select or double-tap to edit
         const dt = Date.now() - touchStartRef.current.time;
         if (dt < 300) {
           if (lastTapRef.current) {
@@ -376,78 +385,50 @@ export const MindMapCanvas: React.FC = () => {
             const tapDx = t.clientX - lastTapRef.current.x;
             const tapDy = t.clientY - lastTapRef.current.y;
             if (tapDt < 400 && Math.sqrt(tapDx * tapDx + tapDy * tapDy) < 30) {
-              // Double tap → start editing
-              setSelectedNode(dr.nodeId);
-              setEditingNode(dr.nodeId);
-              lastTapRef.current = null;
-              nodeDragRef.current = null;
-              touchStartRef.current = null;
+              setSelectedNode(dr.nodeId); setEditingNode(dr.nodeId);
+              lastTapRef.current = null; nodeDragRef.current = null; touchStartRef.current = null;
               return;
             }
           }
-          // Single tap → select
-          setSelectedNode(dr.nodeId);
-          setEditingNode(null);
+          setSelectedNode(dr.nodeId); setEditingNode(null);
           lastTapRef.current = { time: Date.now(), x: t.clientX, y: t.clientY };
         }
       } else if (dr.dragged && map) {
-        // Check reparent on drop
         const worldX = (t.clientX - panX) / zoom;
         const worldY = (t.clientY - panY) / zoom;
         for (const node of Object.values(map.nodes)) {
           if (node.id === dr.nodeId) continue;
-          const dist = Math.sqrt(
-            Math.pow(node.position.x - worldX, 2) + Math.pow(node.position.y - worldY, 2)
-          );
+          const dist = Math.sqrt(Math.pow(node.position.x - worldX, 2) + Math.pow(node.position.y - worldY, 2));
           if (dist < 60) { moveNode(dr.nodeId, node.id); break; }
         }
       }
-
-      nodeDragRef.current = null;
-      touchStartRef.current = null;
-      touchPanRef.current = null;
-      pinchRef.current = null;
+      nodeDragRef.current = null; touchStartRef.current = null; touchPanRef.current = null; pinchRef.current = null;
       return;
     }
-
     if (e.changedTouches.length === 1 && touchStartRef.current) {
       const t = e.changedTouches[0];
       const dx = t.clientX - touchStartRef.current.x;
       const dy = t.clientY - touchStartRef.current.y;
       const dt = Date.now() - touchStartRef.current.time;
       const moved = Math.sqrt(dx * dx + dy * dy);
-
-      // Tap detection (< 200ms, < 5px movement)
       if (dt < 200 && moved < 5) {
-        // Check for double tap
         if (lastTapRef.current) {
           const tapDt = Date.now() - lastTapRef.current.time;
-          const tapDx = t.clientX - lastTapRef.current.x;
-          const tapDy = t.clientY - lastTapRef.current.y;
-          const tapDist = Math.sqrt(tapDx * tapDx + tapDy * tapDy);
+          const tapDist = Math.sqrt(Math.pow(t.clientX - lastTapRef.current.x, 2) + Math.pow(t.clientY - lastTapRef.current.y, 2));
           if (tapDt < 300 && tapDist < 30) {
-            // Double tap on canvas — add sticky note
             const rect = containerRef.current!.getBoundingClientRect();
             const wx = (t.clientX - rect.left - panX) / zoom;
             const wy = (t.clientY - rect.top - panY) / zoom;
             addStickyNote(wx, wy);
-            lastTapRef.current = null;
-            touchStartRef.current = null;
+            lastTapRef.current = null; touchStartRef.current = null;
             return;
           }
         }
-        // Single tap — deselect
-        setSelectedNode(null);
-        setEditingNode(null);
-        setSelectedConnector(null);
-        setContextMenu(null);
+        setSelectedNode(null); setEditingNode(null); setSelectedConnector(null); setContextMenu(null);
         lastTapRef.current = { time: Date.now(), x: t.clientX, y: t.clientY };
       }
     }
-
-    touchStartRef.current = null;
-    touchPanRef.current = null;
-    pinchRef.current = null;
+    touchStartRef.current = null; touchPanRef.current = null; pinchRef.current = null;
   }, [panX, panY, zoom, addStickyNote, setSelectedNode, setEditingNode, setSelectedConnector, setContextMenu, map, moveNode]);
 
   // Keyboard shortcuts
@@ -461,6 +442,19 @@ export const MindMapCanvas: React.FC = () => {
       if (ctrl && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); return; }
       if (ctrl && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); redo(); return; }
       if (ctrl && e.key === 'f') { e.preventDefault(); useUIStore.getState().setSearchOpen(true); return; }
+
+      if (e.key === 'Escape') {
+        const { pendingCrossConnect: pcc, focusModeNodeId: fmn, setPendingCrossConnect: spcc, setFocusMode: sfm } = useUIStore.getState();
+        if (pcc) { spcc(null); return; }
+        if (fmn) { sfm(null); return; }
+      }
+
+      if (e.key === 'f' && selectedNodeId && !e.ctrlKey) {
+        e.preventDefault();
+        const { focusModeNodeId: fmn, setFocusMode: sfm } = useUIStore.getState();
+        if (fmn === selectedNodeId) { sfm(null); } else { sfm(selectedNodeId); }
+        return;
+      }
 
       if (e.key === 'Tab' && selectedNodeId) {
         e.preventDefault();
@@ -481,11 +475,7 @@ export const MindMapCanvas: React.FC = () => {
         setSelectedNode(null);
         return;
       }
-      if (e.key === 'F2' && selectedNodeId) {
-        e.preventDefault();
-        setEditingNode(selectedNodeId);
-        return;
-      }
+      if (e.key === 'F2' && selectedNodeId) { e.preventDefault(); setEditingNode(selectedNodeId); return; }
       if (e.key === ' ' && selectedNodeId) {
         e.preventDefault();
         const node = map.nodes[selectedNodeId];
@@ -526,13 +516,30 @@ export const MindMapCanvas: React.FC = () => {
 
   const rootIds = map.rootNodeIds || [map.rootNodeId];
   const edges = rootIds.flatMap(rootId => collectVisibleEdges(rootId, map.nodes));
-  const allNodes = Object.values(map.nodes);
+
+  // Focus mode: only show subtree of focusModeNodeId
+  let visibleNodeIds: Set<string> | null = null;
+  if (focusModeNodeId && map.nodes[focusModeNodeId]) {
+    visibleNodeIds = collectSubtreeIds(focusModeNodeId, map.nodes);
+  }
+
+  const allNodes = Object.values(map.nodes).filter(n =>
+    visibleNodeIds ? visibleNodeIds.has(n.id) : true
+  );
+  const visibleEdges = visibleNodeIds
+    ? edges.filter(e => visibleNodeIds!.has(e.parent.id) && visibleNodeIds!.has(e.child.id))
+    : edges;
 
   return (
     <div
       ref={containerRef}
-      className={`canvas-container${isPanningActive ? ' panning' : ''}`}
-      style={{ top: 56, touchAction: 'none', userSelect: 'none' }}
+      className={`canvas-container${isPanningActive ? ' panning' : ''}${pendingCrossConnect ? ' cross-connect-mode' : ''}`}
+      style={{
+        top: 56,
+        touchAction: 'none',
+        userSelect: 'none',
+        cursor: pendingCrossConnect ? 'crosshair' : undefined,
+      }}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -548,9 +555,9 @@ export const MindMapCanvas: React.FC = () => {
         className="canvas-transform"
         style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }}
       >
-        {/* SVG layer for connectors */}
+        {/* SVG layer for connectors + cross-connectors */}
         <svg className="connector-svg" style={{ width: 1, height: 1, overflow: 'visible' }}>
-          {edges.map(({ parent, child }) => (
+          {visibleEdges.map(({ parent, child }) => (
             <Connector
               key={`${parent.id}|${child.id}`}
               parent={parent}
@@ -562,6 +569,11 @@ export const MindMapCanvas: React.FC = () => {
               onSelect={setSelectedConnector}
             />
           ))}
+          {/* Cross-connectors rendered in same SVG (world coordinates) */}
+          <CrossConnectorLayer
+            crossConnectors={map.crossConnectors || []}
+            nodes={map.nodes}
+          />
         </svg>
 
         {/* Sticky notes */}
@@ -610,8 +622,24 @@ export const MindMapCanvas: React.FC = () => {
         </span>
       </div>
 
+      {/* Cross-connect pending indicator */}
+      {pendingCrossConnect && (
+        <div style={{
+          position: 'absolute', top: 66, left: '50%', transform: 'translateX(-50%)',
+          background: '#6C5CE7', color: '#fff', borderRadius: 20, padding: '6px 16px',
+          fontSize: 13, zIndex: 30, boxShadow: '0 2px 10px rgba(108,92,231,0.3)',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span>↔</span> Cliquez sur le nœud cible à lier
+          <button
+            onClick={() => setPendingCrossConnect(null)}
+            style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%', width: 20, height: 20, color: '#fff', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >×</button>
+        </div>
+      )}
+
       {/* Minimap */}
-      {showMinimap && (
+      {showMinimap && !pendingCrossConnect && (
         <div style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 20 }}>
           <Minimap map={map} canvasW={dims.w} canvasH={dims.h} zoom={zoom} panX={panX} panY={panY} />
         </div>

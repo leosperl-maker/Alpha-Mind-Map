@@ -2,12 +2,19 @@ import React, { useEffect, useRef } from 'react';
 import { useMapStore } from '../../store/mapStore';
 import { useUIStore } from '../../store/uiStore';
 import { NODE_PALETTE } from '../../utils/colors';
+import { getAISettings, improveNodeText } from '../../utils/aiService';
+import { v4 as uuid } from 'uuid';
 
 export const ContextMenu: React.FC = () => {
   const contextMenu = useUIStore(s => s.contextMenu);
   const setContextMenu = useUIStore(s => s.setContextMenu);
   const setSelectedNode = useUIStore(s => s.setSelectedNode);
   const setEditingNode = useUIStore(s => s.setEditingNode);
+  const setFocusMode = useUIStore(s => s.setFocusMode);
+  const setPendingCrossConnect = useUIStore(s => s.setPendingCrossConnect);
+  const setAISuggestions = useUIStore(s => s.setAISuggestions);
+  const setAILoading = useUIStore(s => s.setAILoading);
+  const setAIImproveOptions = useUIStore(s => s.setAIImproveOptions);
   const ref = useRef<HTMLDivElement>(null);
 
   const maps = useMapStore(s => s.maps);
@@ -18,6 +25,7 @@ export const ContextMenu: React.FC = () => {
   const duplicateNode = useMapStore(s => s.duplicateNode);
   const toggleCollapse = useMapStore(s => s.toggleCollapse);
   const colorBranch = useMapStore(s => s.colorBranch);
+  const toggleNodeStar = useMapStore(s => s.toggleNodeStar);
   const setActivePanel = useUIStore(s => s.setActivePanel);
 
   useEffect(() => {
@@ -42,10 +50,68 @@ export const ContextMenu: React.FC = () => {
 
   const isRoot = (map.rootNodeIds || [map.rootNodeId]).includes(contextMenu.nodeId);
   const rootCount = (map.rootNodeIds || [map.rootNodeId]).length;
+  const isStarred = node.content.isStarred;
 
   const close = () => setContextMenu(null);
-
   const action = (fn: () => void) => () => { fn(); close(); };
+
+  const handleAIBranches = async () => {
+    close();
+    const aiSettings = getAISettings();
+    if (!aiSettings.apiKey) {
+      alert('Clé API Anthropic non configurée. Allez dans Paramètres > IA pour la configurer.');
+      return;
+    }
+    setAILoading(true);
+    try {
+      const { generateBranches } = await import('../../utils/aiService');
+      const contextNodes = Object.values(map.nodes)
+        .filter(n => n.id !== contextMenu.nodeId)
+        .map(n => n.content.text)
+        .filter(Boolean)
+        .slice(0, 15);
+      const suggestions = await generateBranches(
+        node.content.text || 'nœud',
+        contextNodes,
+        aiSettings.apiKey,
+        aiSettings.model,
+        aiSettings.language
+      );
+      setAISuggestions({
+        parentId: contextMenu.nodeId,
+        items: suggestions.map(text => ({ id: uuid(), text })),
+      });
+    } catch (err) {
+      alert('Erreur IA : ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setAILoading(false);
+    }
+  };
+
+  const handleAIImprove = async () => {
+    close();
+    if (!node.content.text) return;
+    const aiSettings = getAISettings();
+    if (!aiSettings.apiKey) {
+      alert('Clé API Anthropic non configurée.');
+      return;
+    }
+    setAILoading(true);
+    try {
+      const options = await improveNodeText(
+        node.content.text,
+        aiSettings.apiKey,
+        aiSettings.model,
+        aiSettings.language
+      );
+      setAIImproveOptions(options);
+      setSelectedNode(contextMenu.nodeId);
+    } catch (err) {
+      alert('Erreur IA : ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setAILoading(false);
+    }
+  };
 
   const [showBranchColors, setShowBranchColors] = React.useState(false);
 
@@ -62,25 +128,34 @@ export const ContextMenu: React.FC = () => {
         borderRadius: 8,
         boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
         zIndex: 100,
-        minWidth: 200,
+        minWidth: 210,
         overflow: 'hidden',
         fontSize: 13,
       }}
     >
-      <MenuItem icon="✏" label="Rename" onClick={action(() => { setSelectedNode(contextMenu.nodeId); setEditingNode(contextMenu.nodeId); })} />
-      <MenuItem icon="⊕" label="Add child (Tab)" onClick={action(() => { const nid = addNode(contextMenu.nodeId); setSelectedNode(nid); setTimeout(() => setEditingNode(nid), 50); })} />
-      {!isRoot && <MenuItem icon="↓" label="Add sibling (Enter)" onClick={action(() => { const nid = addSiblingNode(contextMenu.nodeId); if (nid) { setSelectedNode(nid); setTimeout(() => setEditingNode(nid), 50); } })} />}
-      <MenuItem icon="⧉" label="Duplicate" onClick={action(() => { const nid = duplicateNode(contextMenu.nodeId); if (nid) setSelectedNode(nid); })} />
+      <MenuItem icon="✏" label="Renommer" onClick={action(() => { setSelectedNode(contextMenu.nodeId); setEditingNode(contextMenu.nodeId); })} />
+      <MenuItem icon="⊕" label="Ajouter enfant (Tab)" onClick={action(() => { const nid = addNode(contextMenu.nodeId); setSelectedNode(nid); setTimeout(() => setEditingNode(nid), 50); })} />
+      {!isRoot && <MenuItem icon="↓" label="Ajouter frère (Entrée)" onClick={action(() => { const nid = addSiblingNode(contextMenu.nodeId); if (nid) { setSelectedNode(nid); setTimeout(() => setEditingNode(nid), 50); } })} />}
+      <MenuItem icon="⧉" label="Dupliquer" onClick={action(() => { const nid = duplicateNode(contextMenu.nodeId); if (nid) setSelectedNode(nid); })} />
+
       <Divider />
+
+      <MenuItem
+        icon={isStarred ? '★' : '☆'}
+        label={isStarred ? 'Retirer des favoris' : 'Marquer comme important'}
+        onClick={action(() => toggleNodeStar(contextMenu.nodeId))}
+      />
+
       {node.childrenIds.length > 0 && (
         <MenuItem
           icon={node.position.collapsed ? '▶' : '▼'}
-          label={node.position.collapsed ? 'Expand branch' : 'Collapse branch'}
+          label={node.position.collapsed ? 'Développer' : 'Réduire'}
           onClick={action(() => toggleCollapse(contextMenu.nodeId))}
         />
       )}
+
       <div style={{ position: 'relative' }}>
-        <MenuItem icon="🎨" label="Color branch →" onClick={() => setShowBranchColors(!showBranchColors)} />
+        <MenuItem icon="🎨" label="Colorier la branche →" onClick={() => setShowBranchColors(!showBranchColors)} />
         {showBranchColors && (
           <div style={{
             position: 'absolute', left: '100%', top: 0,
@@ -96,10 +171,34 @@ export const ContextMenu: React.FC = () => {
           </div>
         )}
       </div>
-      <MenuItem icon="📝" label="Add note" onClick={action(() => { setSelectedNode(contextMenu.nodeId); setActivePanel('notes'); })} />
+
+      <MenuItem icon="📝" label="Ajouter une note" onClick={action(() => { setSelectedNode(contextMenu.nodeId); setActivePanel('notes'); })} />
+
+      <Divider />
+
+      {/* AI features */}
+      <MenuItem icon="✨" label="Générer des branches (IA)" onClick={handleAIBranches} />
+      <MenuItem icon="✦" label="Améliorer le texte (IA)" onClick={handleAIImprove} />
+
+      <Divider />
+
+      {/* Focus mode */}
+      <MenuItem
+        icon="🔍"
+        label="Mode Focus"
+        onClick={action(() => { setSelectedNode(contextMenu.nodeId); setFocusMode(contextMenu.nodeId); })}
+      />
+
+      {/* Cross connect */}
+      <MenuItem
+        icon="↔"
+        label="Lier à un autre nœud…"
+        onClick={action(() => { setSelectedNode(contextMenu.nodeId); setPendingCrossConnect(contextMenu.nodeId); })}
+      />
+
       <Divider />
       {!(isRoot && rootCount <= 1) && (
-        <MenuItem icon="🗑" label="Delete" onClick={action(() => { deleteNode(contextMenu.nodeId); setSelectedNode(null); })} danger />
+        <MenuItem icon="🗑" label="Supprimer" onClick={action(() => { deleteNode(contextMenu.nodeId); setSelectedNode(null); })} danger />
       )}
     </div>
   );

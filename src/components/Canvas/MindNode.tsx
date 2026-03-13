@@ -4,6 +4,7 @@ import { getNodeDimensions } from '../../utils/layout';
 import { getLevelColor, hexToRgba } from '../../utils/colors';
 import { useUIStore } from '../../store/uiStore';
 import { useMapStore } from '../../store/mapStore';
+import { NodeMediaDisplay } from './NodeMedia';
 
 interface MindNodeProps {
   node: MindMapNode;
@@ -35,6 +36,8 @@ export const MindNode: React.FC<MindNodeProps> = ({
   const dims = getNodeDimensions(node);
   const fontSize = FONT_SIZE_MAP[node.style.fontSize] ?? 14;
   const isHovered = hoveredNodeId === node.id;
+  const hasMedia = !!(node.content.media?.image || node.content.media?.link);
+  const isStarred = node.content.isStarred;
 
   useEffect(() => {
     if (isEditing && textareaRef.current) {
@@ -91,7 +94,6 @@ export const MindNode: React.FC<MindNodeProps> = ({
     }
   }
 
-  // Override text color if explicitly set (always)
   if (node.style.textColor) textColor = node.style.textColor;
 
   if (isSelected || isMultiSelected) {
@@ -104,6 +106,9 @@ export const MindNode: React.FC<MindNodeProps> = ({
   const hasChildren = node.childrenIds.length > 0;
   const hasNote = node.content.note.trim().length > 0;
   const hasAttachments = node.content.attachments.length > 0;
+
+  // If media present, use flexible width
+  const nodeWidth = hasMedia ? Math.max(dims.w, 180) : dims.w;
 
   return (
     <div
@@ -118,7 +123,7 @@ export const MindNode: React.FC<MindNodeProps> = ({
         aria-label={node.content.text || 'New node'}
         aria-selected={isSelected}
         style={{
-          width: dims.w,
+          width: nodeWidth,
           minHeight: dims.h,
           backgroundColor: fillColor,
           border: `${borderWidth}px solid ${borderColor}`,
@@ -132,18 +137,27 @@ export const MindNode: React.FC<MindNodeProps> = ({
             : '0 1px 4px rgba(0,0,0,0.06)',
           cursor: isEditing ? 'text' : 'grab',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '8px 14px',
+          padding: hasMedia ? '6px 10px' : '8px 14px',
           transition: 'box-shadow 120ms ease, border-color 120ms ease',
           position: 'relative',
           userSelect: 'none',
+          gap: hasMedia ? 6 : 0,
         }}
         onClick={(e) => { if (!isEditing) onSelect(node.id, e); }}
         onDoubleClick={(e) => { e.stopPropagation(); onDoubleClick(node.id); }}
         onMouseDown={(e) => { if (!isEditing) { e.stopPropagation(); onDragStart(node.id, e); } }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(node.id, e); }}
       >
+        {/* Media: image + link rendered above text */}
+        {hasMedia && node.content.media && (
+          <div style={{ width: '100%' }} onMouseDown={e => e.stopPropagation()}>
+            <NodeMediaDisplay nodeId={node.id} media={node.content.media} />
+          </div>
+        )}
+
         {isEditing ? (
           <textarea
             ref={textareaRef}
@@ -158,6 +172,7 @@ export const MindNode: React.FC<MindNodeProps> = ({
               fontWeight: node.style.fontWeight === 'bold' ? 700 : 400,
               color: textColor,
               minHeight: fontSize * 1.4,
+              width: '100%',
             }}
           />
         ) : (
@@ -177,11 +192,14 @@ export const MindNode: React.FC<MindNodeProps> = ({
 
         {/* Badges */}
         <div style={{ position: 'absolute', top: -4, right: -4, display: 'flex', gap: 3 }}>
+          {isStarred && (
+            <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#FDCB6E', border: '1.5px solid white' }} title="Favori" />
+          )}
           {hasNote && (
             <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#00B894', border: '1.5px solid white' }} title="Has note" />
           )}
           {hasAttachments && (
-            <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#FDCB6E', border: '1.5px solid white' }} title="Has attachments" />
+            <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#74B9FF', border: '1.5px solid white' }} title="Has attachments" />
           )}
         </div>
       </div>

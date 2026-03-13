@@ -31,10 +31,35 @@ export interface NodeStyle {
   connectorWidth: ConnectorWidth;
 }
 
+// ── Media types ───────────────────────────────────────────────────────────────
+
+export interface NodeImage {
+  type: 'base64' | 'url';
+  data?: string;   // base64 data URI  e.g. "data:image/png;base64,..."
+  url?: string;    // external image URL
+  width?: number;
+  height?: number;
+}
+
+export interface NodeLink {
+  url: string;
+  title?: string;
+  favicon?: string;
+}
+
+export interface NodeMedia {
+  image?: NodeImage;
+  link?: NodeLink;
+}
+
+// ── Node content ──────────────────────────────────────────────────────────────
+
 export interface NodeContent {
   text: string;
   note: string;
   attachments: NodeAttachment[];
+  media?: NodeMedia;
+  isStarred?: boolean;
 }
 
 export interface NodePosition {
@@ -77,6 +102,18 @@ export interface StickyNote {
   height: number;
 }
 
+// ── Cross connectors (non parent-child links) ─────────────────────────────────
+
+export interface CrossConnector {
+  id: string;
+  fromId: string;
+  toId: string;
+  label?: string;
+  color?: string;
+}
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+
 export interface MindMap {
   id: string;
   title: string;
@@ -93,10 +130,12 @@ export interface MindMap {
   rootNodeIds: string[]; // support for multiple root nodes
   nodes: Record<string, MindMapNode>;
   stickyNotes: StickyNote[];
+  crossConnectors: CrossConnector[];
 }
 
 export interface HistoryEntry {
   nodes: Record<string, MindMapNode>;
   stickyNotes: StickyNote[];
   rootNodeIds: string[];
+  crossConnectors: CrossConnector[];
 }

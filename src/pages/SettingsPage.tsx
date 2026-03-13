@@ -6,6 +6,8 @@ import { isMockMode } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { inputStyle, ErrorMsg } from './LoginPage';
 import { ALPHA_COLORS } from '../utils/colors';
+import { getAISettings, saveAISettings } from '../utils/aiService';
+import type { AISettings } from '../utils/aiService';
 
 export const SettingsPage: React.FC = () => {
   const { user, updateProfile, signOut } = useAuth();
@@ -23,6 +25,16 @@ export const SettingsPage: React.FC = () => {
 
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [showDelete, setShowDelete] = useState(false);
+
+  const [aiSettings, setAISettings] = useState<AISettings>(getAISettings);
+  const [aiSaved, setAISaved] = useState(false);
+
+  const handleSaveAI = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveAISettings(aiSettings);
+    setAISaved(true);
+    setTimeout(() => setAISaved(false), 2500);
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,6 +147,62 @@ export const SettingsPage: React.FC = () => {
                 {pwStatus === 'saving' ? 'Enregistrement…' : 'Changer le mot de passe'}
               </button>
               {pwStatus === 'saved' && <span style={{ fontSize: 13, color: '#00B894' }}>✓ Mot de passe modifié</span>}
+            </div>
+          </form>
+        </Card>
+
+        {/* AI Settings */}
+        <Card title="Intelligence Artificielle (IA)">
+          <form onSubmit={handleSaveAI} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <Field label="Activer l'IA">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={aiSettings.enabled}
+                  onChange={e => setAISettings(s => ({ ...s, enabled: e.target.checked }))}
+                  style={{ width: 18, height: 18, cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 13, color: '#2D3436' }}>Activer les fonctionnalités IA</span>
+              </label>
+            </Field>
+            <Field label="Clé API Anthropic">
+              <input
+                type="password"
+                value={aiSettings.apiKey}
+                onChange={e => setAISettings(s => ({ ...s, apiKey: e.target.value }))}
+                placeholder="sk-ant-api03-..."
+                style={inputStyle}
+                autoComplete="off"
+              />
+              <span style={{ fontSize: 11, color: '#636E72', marginTop: 4 }}>
+                Obtenez votre clé sur <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer" style={{ color: ALPHA_COLORS.primary }}>console.anthropic.com</a>
+              </span>
+            </Field>
+            <Field label="Modèle Claude">
+              <select
+                value={aiSettings.model}
+                onChange={e => setAISettings(s => ({ ...s, model: e.target.value }))}
+                style={{ ...inputStyle, appearance: 'auto' }}
+              >
+                <option value="claude-opus-4-5">claude-opus-4-5 (Recommandé)</option>
+                <option value="claude-sonnet-4-5">claude-sonnet-4-5</option>
+                <option value="claude-haiku-4-5">claude-haiku-4-5 (Rapide)</option>
+              </select>
+            </Field>
+            <Field label="Langue des suggestions IA">
+              <select
+                value={aiSettings.language}
+                onChange={e => setAISettings(s => ({ ...s, language: e.target.value as 'fr' | 'en' | 'es' }))}
+                style={{ ...inputStyle, appearance: 'auto' }}
+              >
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+                <option value="es">Español</option>
+              </select>
+            </Field>
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+              <button type="submit" style={saveBtnStyle}>Enregistrer</button>
+              {aiSaved && <span style={{ fontSize: 13, color: '#00B894' }}>✓ Sauvegardé</span>}
             </div>
           </form>
         </Card>
