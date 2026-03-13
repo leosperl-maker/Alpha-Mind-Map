@@ -59,6 +59,7 @@ export const MindMapCanvas: React.FC = () => {
   const maps = useMapStore(s => s.maps);
   const activeMapId = useMapStore(s => s.activeMapId);
   const addNode = useMapStore(s => s.addNode);
+  const addNodeOnSide = useMapStore(s => s.addNodeOnSide);
   const addSiblingNode = useMapStore(s => s.addSiblingNode);
   const deleteNode = useMapStore(s => s.deleteNode);
   const moveNode = useMapStore(s => s.moveNode);
@@ -265,6 +266,12 @@ export const MindMapCanvas: React.FC = () => {
     setSelectedNode(newId);
     setTimeout(() => setEditingNode(newId), 50);
   }, [addNode, setSelectedNode, setEditingNode]);
+
+  const handleAddChildLeft = useCallback((nodeId: string) => {
+    const newId = addNodeOnSide(nodeId, 'left');
+    setSelectedNode(newId);
+    setTimeout(() => setEditingNode(newId), 50);
+  }, [addNodeOnSide, setSelectedNode, setEditingNode]);
 
   const handleNodeDragStart = useCallback((nodeId: string, e: React.MouseEvent) => {
     if (!map) return;
@@ -596,6 +603,7 @@ export const MindMapCanvas: React.FC = () => {
             onSelect={handleNodeSelect}
             onDoubleClick={handleNodeDoubleClick}
             onAddChild={handleAddChild}
+            onAddChildLeft={rootIds.includes(node.id) ? handleAddChildLeft : undefined}
             onDragStart={handleNodeDragStart}
             onContextMenu={handleContextMenu}
           />

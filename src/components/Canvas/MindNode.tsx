@@ -18,6 +18,7 @@ interface MindNodeProps {
   onSelect: (id: string, e: React.MouseEvent) => void;
   onDoubleClick: (id: string) => void;
   onAddChild: (id: string) => void;
+  onAddChildLeft?: (id: string) => void;
   onDragStart: (id: string, e: React.MouseEvent) => void;
   onContextMenu: (id: string, e: React.MouseEvent) => void;
 }
@@ -27,7 +28,7 @@ const FONT_SIZE_MAP = { xs: 11, s: 12, m: 14, l: 17, xl: 21 };
 export const MindNode: React.FC<MindNodeProps> = ({
   node, isRoot, isSelected, isMultiSelected, isEditing,
   mapStyle, themeColor, depth,
-  onSelect, onDoubleClick, onAddChild, onDragStart, onContextMenu,
+  onSelect, onDoubleClick, onAddChild, onAddChildLeft, onDragStart, onContextMenu,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { setEditingNode, setHoveredNode, hoveredNodeId } = useUIStore();
@@ -250,6 +251,33 @@ export const MindNode: React.FC<MindNodeProps> = ({
           onMouseLeave={e => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.transform = 'translateY(-50%) scale(1)'; }}
           title="Add child node (Tab)"
           aria-label="Add child node"
+        >
+          +
+        </button>
+      )}
+
+      {/* Left add child button — root node only */}
+      {isRoot && onAddChildLeft && (isHovered || isSelected) && !isEditing && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onAddChildLeft(node.id); }}
+          onDoubleClick={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            left: -26,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: 22, height: 22, borderRadius: '50%',
+            background: themeColor, border: 'none', cursor: 'pointer',
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 16, lineHeight: 1, zIndex: 10, opacity: 0.8,
+            transition: 'opacity 120ms, transform 120ms',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.transform = 'translateY(-50%) scale(1)'; }}
+          title="Ajouter un enfant à gauche"
+          aria-label="Add child node left"
         >
           +
         </button>
