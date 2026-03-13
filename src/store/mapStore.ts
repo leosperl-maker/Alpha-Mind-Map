@@ -129,6 +129,7 @@ export interface MapState {
   importMap: (json: string) => string | null;
 
   addNode: (parentId: string) => string;
+  addNodeOnSide: (parentId: string, side: 'left' | 'right') => string;
   addRootNode: () => string;
   addSiblingNode: (nodeId: string) => string | null;
   deleteNode: (nodeId: string) => void;
@@ -327,6 +328,12 @@ export const useMapStore = create<MapState>((set, get) => ({
       }),
     }));
     get().recomputeLayout();
+    return nodeId;
+  },
+
+  addNodeOnSide: (parentId, side) => {
+    const nodeId = get().addNode(parentId);
+    get().setNodeSide(nodeId, side);
     return nodeId;
   },
 
