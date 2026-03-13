@@ -20,15 +20,15 @@ export const AIPanel: React.FC = () => {
   const handleSummarize = async () => {
     if (!map) return;
     const settings = getAISettings();
-    if (!settings.enabled || !settings.apiKey) {
-      setError('Configurez votre clé API dans Paramètres > IA.');
+    if (!settings.enabled) {
+      setError("IA non activée. Configurez l'IA dans Paramètres > IA.");
       return;
     }
     setLoading(true);
     setError(null);
     setSummary(null);
     try {
-      const result = await summarizeMap(map.nodes, map.rootNodeIds, settings.apiKey, settings.model, settings.language);
+      const result = await summarizeMap(map.nodes, map.rootNodeIds, settings.geminiApiKey, settings.model, settings.language);
       setSummary(result);
     } catch (e: unknown) {
       setError((e as Error).message || 'Erreur lors de la génération du résumé.');

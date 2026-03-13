@@ -162,33 +162,51 @@ export const SettingsPage: React.FC = () => {
                   onChange={e => setAISettings(s => ({ ...s, enabled: e.target.checked }))}
                   style={{ width: 18, height: 18, cursor: 'pointer' }}
                 />
-                <span style={{ fontSize: 13, color: '#2D3436' }}>Activer les fonctionnalités IA</span>
+                <span style={{ fontSize: 13, color: '#2D3436' }}>Activer les fonctionnalités IA (Gemini)</span>
               </label>
             </Field>
-            <Field label="Clé API Anthropic">
+
+            <div style={{ background: '#F0FFF4', border: '1px solid #C3FAE8', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#00695c', lineHeight: 1.5 }}>
+              <strong>Gratuit :</strong> Alpha Mind Map inclut une clé partagée Gemini (limites : 1000 req/jour, 15/min).
+              Pour des limites plus élevées, entrez votre propre clé.
+            </div>
+
+            <Field label="Fournisseur IA">
+              <div style={{ padding: '9px 14px', background: '#F8F9FA', border: '1px solid #DFE6E9', borderRadius: 8, fontSize: 13, color: '#2D3436', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>Gemini (Google)</span>
+                <span style={{ fontSize: 11, color: '#00B894', background: '#E8FFF5', padding: '1px 8px', borderRadius: 12, fontWeight: 600 }}>Gratuit</span>
+              </div>
+            </Field>
+
+            <Field label="Clé API Google AI Studio (optionnel)">
               <input
                 type="password"
-                value={aiSettings.apiKey}
-                onChange={e => setAISettings(s => ({ ...s, apiKey: e.target.value }))}
-                placeholder="sk-ant-api03-..."
+                value={aiSettings.geminiApiKey}
+                onChange={e => setAISettings(s => ({ ...s, geminiApiKey: e.target.value }))}
+                placeholder="AIzaSy… (laisser vide = tier gratuit partagé)"
                 style={inputStyle}
                 autoComplete="off"
               />
               <span style={{ fontSize: 11, color: '#636E72', marginTop: 4 }}>
-                Obtenez votre clé sur <a href="https://console.anthropic.com" target="_blank" rel="noopener noreferrer" style={{ color: ALPHA_COLORS.primary }}>console.anthropic.com</a>
+                Obtenez votre clé sur{' '}
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: ALPHA_COLORS.primary }}>
+                  aistudio.google.com
+                </a>
               </span>
             </Field>
-            <Field label="Modèle Claude">
+
+            <Field label="Modèle Gemini">
               <select
                 value={aiSettings.model}
                 onChange={e => setAISettings(s => ({ ...s, model: e.target.value }))}
                 style={{ ...inputStyle, appearance: 'auto' }}
               >
-                <option value="claude-opus-4-5">claude-opus-4-5 (Recommandé)</option>
-                <option value="claude-sonnet-4-5">claude-sonnet-4-5</option>
-                <option value="claude-haiku-4-5">claude-haiku-4-5 (Rapide)</option>
+                <option value="gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash (Recommandé)</option>
+                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
               </select>
             </Field>
+
             <Field label="Langue des suggestions IA">
               <select
                 value={aiSettings.language}
@@ -205,6 +223,11 @@ export const SettingsPage: React.FC = () => {
               {aiSaved && <span style={{ fontSize: 13, color: '#00B894' }}>✓ Sauvegardé</span>}
             </div>
           </form>
+        </Card>
+
+        {/* API Tokens */}
+        <Card title="API & Intégrations">
+          <APITokensSection />
         </Card>
 
         {/* Danger zone */}
@@ -268,4 +291,128 @@ const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, 
 const saveBtnStyle: React.CSSProperties = {
   padding: '9px 20px', background: ALPHA_COLORS.primary, color: '#fff',
   border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+};
+
+// ── API Tokens Section ────────────────────────────────────────────────────────
+
+const TOKENS_KEY = 'alpha-mind-map-api-tokens';
+
+interface APIToken {
+  id: string;
+  name: string;
+  token: string;
+  createdAt: string;
+}
+
+function getTokens(): APIToken[] {
+  try { return JSON.parse(localStorage.getItem(TOKENS_KEY) || '[]'); } catch { return []; }
+}
+function saveTokens(tokens: APIToken[]) {
+  localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens));
+}
+function genToken(): string {
+  const arr = new Uint8Array(20);
+  crypto.getRandomValues(arr);
+  return 'amm_' + Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+const APITokensSection: React.FC = () => {
+  const [tokens, setTokens] = React.useState<APIToken[]>(getTokens);
+  const [showNew, setShowNew] = React.useState(false);
+  const [newName, setNewName] = React.useState('');
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
+
+  const handleCreate = () => {
+    if (!newName.trim()) return;
+    const t: APIToken = {
+      id: crypto.randomUUID(),
+      name: newName.trim(),
+      token: genToken(),
+      createdAt: new Date().toLocaleDateString('fr-FR'),
+    };
+    const updated = [...tokens, t];
+    saveTokens(updated);
+    setTokens(updated);
+    setNewName('');
+    setShowNew(false);
+  };
+
+  const handleRevoke = (id: string) => {
+    if (!confirm('Révoquer ce token ? Les intégrations utilisant ce token cesseront de fonctionner.')) return;
+    const updated = tokens.filter(t => t.id !== id);
+    saveTokens(updated);
+    setTokens(updated);
+  };
+
+  const handleCopy = (token: APIToken) => {
+    navigator.clipboard.writeText(token.token);
+    setCopiedId(token.id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <p style={{ margin: 0, fontSize: 13, color: '#636E72', lineHeight: 1.5 }}>
+        Générez des tokens pour intégrer Alpha Mind Map avec des outils externes (n8n, Make, Zapier).
+      </p>
+
+      {tokens.length === 0 && (
+        <div style={{ background: '#F8F9FA', border: '1px dashed #DFE6E9', borderRadius: 8, padding: '16px', textAlign: 'center', fontSize: 13, color: '#636E72' }}>
+          Aucun token API. Cliquez sur "+" pour en créer un.
+        </div>
+      )}
+
+      {tokens.map(t => (
+        <div key={t.id} style={{ background: '#F8F9FA', border: '1px solid #DFE6E9', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#2D3436', marginBottom: 2 }}>🔑 {t.name}</div>
+            <div style={{ fontSize: 12, color: '#636E72', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {t.token.slice(0, 16)}…
+            </div>
+            <div style={{ fontSize: 11, color: '#b2bec3', marginTop: 2 }}>Créé le {t.createdAt}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button
+              onClick={() => handleCopy(t)}
+              style={{ padding: '6px 12px', background: copiedId === t.id ? '#00B894' : '#fff', color: copiedId === t.id ? '#fff' : '#636E72', border: '1px solid #DFE6E9', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: 600 }}
+            >
+              {copiedId === t.id ? '✓ Copié' : 'Copier'}
+            </button>
+            <button
+              onClick={() => handleRevoke(t.id)}
+              style={{ padding: '6px 12px', background: 'none', color: '#E17055', border: '1px solid #FFD7D7', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}
+            >
+              Révoquer
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {showNew ? (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            autoFocus
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') { setShowNew(false); setNewName(''); } }}
+            placeholder="Nom du token (ex: n8n prod)"
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <button onClick={handleCreate} disabled={!newName.trim()} style={{ ...saveBtnStyle, opacity: newName.trim() ? 1 : 0.5 }}>Créer</button>
+          <button onClick={() => { setShowNew(false); setNewName(''); }} style={{ padding: '9px 14px', background: '#F8F9FA', border: '1px solid #DFE6E9', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#636E72' }}>Annuler</button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowNew(true)}
+          style={{ padding: '9px 18px', background: 'none', border: `1px solid ${ALPHA_COLORS.primary}`, borderRadius: 8, color: ALPHA_COLORS.primary, fontSize: 13, fontWeight: 600, cursor: 'pointer', alignSelf: 'flex-start' }}
+        >
+          + Générer un nouveau token
+        </button>
+      )}
+
+      <div style={{ fontSize: 12, color: '#b2bec3', lineHeight: 1.5 }}>
+        Utilisation : <code style={{ background: '#F8F9FA', padding: '1px 4px', borderRadius: 3 }}>Authorization: Bearer {'<token>'}</code>
+      </div>
+    </div>
+  );
 };

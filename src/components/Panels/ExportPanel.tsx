@@ -46,6 +46,46 @@ export const ExportPanel: React.FC = () => {
     download(md, `${map.title}.md`, 'text/markdown');
   }
 
+  function toNotebookLM(nodeId: string, nodes: Record<string, MindMapNode>, depth = 0): string {
+    const node = nodes[nodeId];
+    if (!node) return '';
+    if (depth === 0) {
+      let out = `# ${node.content.text || 'Untitled'}\n\n`;
+      for (const cid of node.childrenIds) out += toNotebookLM(cid, nodes, 1);
+      return out;
+    }
+    if (depth === 1) {
+      let out = `## ${node.content.text || 'Untitled'}\n`;
+      if (node.content.note.trim()) out += `\n> ${node.content.note.replace(/\n/g, '\n> ')}\n`;
+      out += '\n';
+      for (const cid of node.childrenIds) out += toNotebookLM(cid, nodes, 2);
+      return out;
+    }
+    const indent = '  '.repeat(depth - 2);
+    let out = `${indent}- ${node.content.text || 'Untitled'}\n`;
+    if (node.content.note.trim()) out += `${indent}  > ${node.content.note.replace(/\n/g, `\n${indent}  > `)}\n`;
+    for (const cid of node.childrenIds) out += toNotebookLM(cid, nodes, depth + 1);
+    return out;
+  }
+
+  function exportNotebookLM() {
+    if (!map) return;
+    const rootIds = map.rootNodeIds || [map.rootNodeId];
+    const title = map.title;
+    let md = `# ${title}\n\n`;
+    md += `> Exporté depuis Alpha Mind Map le ${new Date().toLocaleDateString('fr-FR')}\n\n`;
+    md += rootIds.map(rid => {
+      const root = map.nodes[rid];
+      if (!root) return '';
+      if (rootIds.length > 1) {
+        return `# ${root.content.text || 'Untitled'}\n\n` +
+          root.childrenIds.map(cid => toNotebookLM(cid, map.nodes, 1)).join('');
+      }
+      return root.childrenIds.map(cid => toNotebookLM(cid, map.nodes, 1)).join('');
+    }).join('\n\n---\n\n');
+    download(md, `${map.title}_notebooklm.md`, 'text/markdown');
+  }
+
   function exportSVG() {
     const svgEl = document.querySelector('.connector-svg')?.closest('.canvas-transform');
     if (!svgEl) { alert('Open a map to export SVG'); return; }
@@ -85,13 +125,19 @@ export const ExportPanel: React.FC = () => {
   const panelContent = (
     <div style={{ padding: 20, overflow: 'auto' }}>
       <Section title="Export">
-        <ExportBtn icon="{ }" label="Export JSON" desc="Full map data, re-importable" onClick={exportJSON} />
-        <ExportBtn icon="# " label="Export Markdown" desc="Nested bullet list" onClick={exportMarkdown} />
-        <ExportBtn icon="⬡" label="Export SVG" desc="Vector graphic of current view" onClick={exportSVG} />
+        <ExportBtn icon="{ }" label="Export JSON" desc="Données complètes, ré-importable" onClick={exportJSON} />
+        <ExportBtn icon="# " label="Export Markdown" desc="Liste indentée en Markdown" onClick={exportMarkdown} />
+        <ExportBtn
+          icon="📓"
+          label="Export pour NotebookLM"
+          desc="Markdown structuré pour Google NotebookLM"
+          onClick={exportNotebookLM}
+        />
+        <ExportBtn icon="⬡" label="Export SVG" desc="Graphique vectoriel de la vue actuelle" onClick={exportSVG} />
         <ExportBtn
           icon="🖨"
-          label="Print / Save PDF"
-          desc="Use browser print to save as PDF"
+          label="Imprimer / Enregistrer PDF"
+          desc="Utilisez l'impression du navigateur"
           onClick={() => window.print()}
         />
       </Section>
