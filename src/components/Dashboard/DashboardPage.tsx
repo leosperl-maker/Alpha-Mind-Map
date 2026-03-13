@@ -8,6 +8,7 @@ import type { Workspace } from '../../store/workspaceStore';
 import { ALPHA_COLORS } from '../../utils/colors';
 import { AppLogo } from '../common/AppLogo';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
+import { getAISettings, generateFullMap } from '../../utils/aiService';
 
 type SidebarView = 'home' | 'starred' | 'recents' | 'trash' | string; // string = workspaceId
 
@@ -25,6 +26,7 @@ export const DashboardPage: React.FC = () => {
   const trashMap = useMapStore(s => s.trashMap);
   const restoreMap = useMapStore(s => s.restoreMap);
   const moveMapToWorkspace = useMapStore(s => s.moveMapToWorkspace);
+  const updateMapFromAI = useMapStore(s => s.updateMapFromAI);
 
   const workspaces = useWorkspaceStore(s => s.workspaces);
   const activeWorkspaceId = useWorkspaceStore(s => s.activeWorkspaceId);
@@ -42,6 +44,10 @@ export const DashboardPage: React.FC = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
+  const [aiTopic, setAITopic] = useState('');
+  const [aiLoading, setAILoading] = useState(false);
+  const [aiError, setAIError] = useState('');
 
   // Map filtering
   const nonTrashed = maps.filter(m => !m.isTrashed);
@@ -88,6 +94,32 @@ export const DashboardPage: React.FC = () => {
     navigate(`/map/${id}`);
   };
 
+  const handleAICreateMap = async () => {
+    if (!aiTopic.trim()) return;
+    const settings = getAISettings();
+    if (!settings.enabled || !settings.apiKey) {
+      setAIError('Configurez votre clé API dans Paramètres > IA.');
+      return;
+    }
+    setAILoading(true);
+    setAIError('');
+    try {
+      const data = await generateFullMap(aiTopic.trim(), settings.apiKey, settings.model, settings.language);
+      const wsId = (sidebarView !== 'home' && sidebarView !== 'starred' && sidebarView !== 'recents' && sidebarView !== 'trash')
+        ? sidebarView
+        : (activeWorkspaceId || 'personal');
+      const mapId = createMap(data.root || aiTopic.trim(), wsId);
+      updateMapFromAI(mapId, data);
+      setShowAIModal(false);
+      setAITopic('');
+      navigate(`/map/${mapId}`);
+    } catch (e: unknown) {
+      setAIError((e as Error).message || 'Erreur lors de la génération.');
+    } finally {
+      setAILoading(false);
+    }
+  };
+
   const handleSidebarSelect = (view: SidebarView) => {
     setSidebarView(view);
     setMobileSidebarOpen(false);
@@ -121,10 +153,17 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {/* New map button */}
-      <div style={{ padding: '12px 16px 8px' }}>
+      <div style={{ padding: '12px 16px 8px', display: 'flex', flexDirection: 'column', gap: 6 }}>
         <button onClick={handleNewMap} style={newMapBtnStyle}>
           <span style={{ fontSize: 18, lineHeight: 1 }}>+</span>
           Nouvelle Map
+        </button>
+        <button
+          onClick={() => setShowAIModal(true)}
+          style={{ ...newMapBtnStyle, background: 'linear-gradient(135deg, #6C5CE7, #a29bfe)', color: '#fff', border: 'none' }}
+        >
+          <span style={{ fontSize: 16, lineHeight: 1 }}>✨</span>
+          Créer avec l'IA
         </button>
       </div>
 
@@ -384,6 +423,72 @@ export const DashboardPage: React.FC = () => {
             setShowNewWorkspaceModal(false);
           }}
         />
+      )}
+
+      {/* AI Map Creation Modal */}
+      {showAIModal && (
+        <>
+          <div
+            onClick={() => { setShowAIModal(false); setAIError(''); }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 300 }}
+          />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 301, background: '#fff', borderRadius: 16,
+            boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
+            padding: '28px 32px', width: 480, maxWidth: '95vw',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#2D3436' }}>✨ Créer une map avec l'IA</h2>
+              <button
+                onClick={() => { setShowAIModal(false); setAIError(''); }}
+                style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#636E72', padding: 4 }}
+              >×</button>
+            </div>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#636E72', lineHeight: 1.5 }}>
+              Décrivez le sujet de votre mind map et l'IA la générera automatiquement.
+            </p>
+            <textarea
+              value={aiTopic}
+              onChange={e => setAITopic(e.target.value)}
+              placeholder="Ex: Les étapes du développement d'une application mobile..."
+              rows={3}
+              style={{
+                width: '100%', border: '1px solid #DFE6E9', borderRadius: 8,
+                padding: '10px 14px', fontSize: 14, resize: 'vertical',
+                fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+                marginBottom: 12,
+              }}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAICreateMap(); }}
+              autoFocus
+            />
+            {aiError && (
+              <div style={{ background: '#FFF5F5', border: '1px solid #FFD7D7', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#E17055', marginBottom: 12 }}>
+                {aiError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => { setShowAIModal(false); setAIError(''); }}
+                style={{ padding: '9px 18px', background: '#F8F9FA', border: '1px solid #DFE6E9', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#636E72' }}
+              >Annuler</button>
+              <button
+                onClick={handleAICreateMap}
+                disabled={aiLoading || !aiTopic.trim()}
+                style={{
+                  padding: '9px 20px',
+                  background: aiLoading || !aiTopic.trim() ? '#F8F9FA' : 'linear-gradient(135deg, #6C5CE7, #a29bfe)',
+                  color: aiLoading || !aiTopic.trim() ? '#b2bec3' : '#fff',
+                  border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  cursor: aiLoading || !aiTopic.trim() ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {aiLoading ? '⟳ Génération…' : '✨ Générer la map'}
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

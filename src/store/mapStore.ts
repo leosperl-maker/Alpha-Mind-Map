@@ -6,7 +6,9 @@ import type {
   MindMapNode,
   MapSettings,
   NodeStyle,
+  NodeMedia,
   StickyNote,
+  CrossConnector,
   HistoryEntry,
 } from '../types';
 import { computeRadialLayout } from '../utils/layout';
@@ -58,6 +60,7 @@ function createNewMap(title = 'Untitled Map'): MindMap {
     rootNodeIds: [root.id],
     nodes: { [root.id]: root },
     stickyNotes: [],
+    crossConnectors: [],
   };
 }
 
@@ -66,10 +69,11 @@ function loadFromStorage(): { maps: MindMap[]; activeMapId: string | null } {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { maps: [], activeMapId: null };
     const data = JSON.parse(raw);
-    // Migrate old maps that don't have rootNodeIds
+    // Migrate old maps
     const maps = (data.maps || []).map((m: MindMap) => ({
       ...m,
       rootNodeIds: m.rootNodeIds || [m.rootNodeId],
+      crossConnectors: m.crossConnectors || [],
       stickyNotes: (m.stickyNotes || []).map((s: StickyNote) => ({
         ...s,
         width: s.width ?? 180,
@@ -84,6 +88,11 @@ function loadFromStorage(): { maps: MindMap[]; activeMapId: string | null } {
               ...node.style,
               connectorColor: node.style.connectorColor ?? null,
               connectorWidth: node.style.connectorWidth ?? ('normal' as const),
+            },
+            content: {
+              ...node.content,
+              media: node.content.media ?? undefined,
+              isStarred: node.content.isStarred ?? false,
             },
           }];
         })
@@ -126,6 +135,8 @@ export interface MapState {
   updateNodeText: (nodeId: string, text: string) => void;
   updateNodeNote: (nodeId: string, note: string) => void;
   updateNodeStyle: (nodeId: string, style: Partial<NodeStyle>) => void;
+  updateNodeMedia: (nodeId: string, media: NodeMedia | null) => void;
+  toggleNodeStar: (nodeId: string) => void;
   updateNodePosition: (nodeId: string, x: number, y: number) => void;
   setNodeSide: (nodeId: string, side: 'left' | 'right') => void;
   toggleCollapse: (nodeId: string) => void;
@@ -136,6 +147,10 @@ export interface MapState {
   addStickyNote: (x: number, y: number) => void;
   updateStickyNote: (id: string, patch: Partial<StickyNote>) => void;
   deleteStickyNote: (id: string) => void;
+
+  addCrossConnector: (fromId: string, toId: string) => string;
+  removeCrossConnector: (id: string) => void;
+  updateMapFromAI: (mapId: string, data: { root: string; branches: { text: string; children: string[] }[] }) => void;
 
   recomputeLayout: () => void;
   undo: () => void;
@@ -256,6 +271,7 @@ export const useMapStore = create<MapState>((set, get) => ({
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         rootNodeIds: data.rootNodeIds || [data.rootNodeId],
+        crossConnectors: data.crossConnectors || [],
       };
       set(s => ({ maps: [...s.maps, imported], activeMapId: imported.id }));
       get().recomputeLayout();
@@ -276,11 +292,9 @@ export const useMapStore = create<MapState>((set, get) => ({
     const parent = map.nodes[parentId];
     if (!parent) return '';
 
-    // Determine side: inherit from parent or default to right
     const parentSide = parent.position.side;
     let side: 'left' | 'right' = 'right';
     if (parent.parentId === null) {
-      // parent is root — new child goes right by default
       side = 'right';
     } else if (parentSide) {
       side = parentSide;
@@ -351,7 +365,6 @@ export const useMapStore = create<MapState>((set, get) => ({
     const node = map.nodes[nodeId];
     if (!node || !node.parentId) return null;
     const sibling = get().addNode(node.parentId);
-    // inherit side
     if (node.position.side) {
       get().setNodeSide(sibling, node.position.side);
     }
@@ -361,7 +374,6 @@ export const useMapStore = create<MapState>((set, get) => ({
   deleteNode: (nodeId) => {
     const map = getActiveMap(get());
     if (!map) return;
-    // Can't delete the last root
     const isRoot = (map.rootNodeIds || [map.rootNodeId]).includes(nodeId);
     const rootCount = (map.rootNodeIds || [map.rootNodeId]).length;
     if (isRoot && rootCount <= 1) return;
@@ -390,11 +402,16 @@ export const useMapStore = create<MapState>((set, get) => ({
           };
         }
         const newRootIds = (m.rootNodeIds || [m.rootNodeId]).filter(r => r !== nodeId);
+        // Remove cross connectors referencing deleted nodes
+        const newCross = (m.crossConnectors || []).filter(
+          cc => !toRemove.has(cc.fromId) && !toRemove.has(cc.toId)
+        );
         return {
           ...m,
           nodes: newNodes,
           rootNodeIds: newRootIds,
           rootNodeId: newRootIds[0] ?? m.rootNodeId,
+          crossConnectors: newCross,
           updatedAt: new Date().toISOString(),
         };
       }),
@@ -447,6 +464,46 @@ export const useMapStore = create<MapState>((set, get) => ({
         return {
           ...m,
           nodes: { ...m.nodes, [nodeId]: { ...node, style: { ...node.style, ...style } } },
+        };
+      }),
+    }));
+  },
+
+  updateNodeMedia: (nodeId, media) => {
+    get().pushHistory();
+    const id = get().activeMapId;
+    if (!id) return;
+    set(s => ({
+      maps: s.maps.map(m => {
+        if (m.id !== id) return m;
+        const node = m.nodes[nodeId];
+        if (!node) return m;
+        return {
+          ...m,
+          updatedAt: new Date().toISOString(),
+          nodes: {
+            ...m.nodes,
+            [nodeId]: { ...node, content: { ...node.content, media: media ?? undefined } },
+          },
+        };
+      }),
+    }));
+  },
+
+  toggleNodeStar: (nodeId) => {
+    const id = get().activeMapId;
+    if (!id) return;
+    set(s => ({
+      maps: s.maps.map(m => {
+        if (m.id !== id) return m;
+        const node = m.nodes[nodeId];
+        if (!node) return m;
+        return {
+          ...m,
+          nodes: {
+            ...m.nodes,
+            [nodeId]: { ...node, content: { ...node.content, isStarred: !node.content.isStarred } },
+          },
         };
       }),
     }));
@@ -547,7 +604,6 @@ export const useMapStore = create<MapState>((set, get) => ({
           };
         }
         newNodes[nodeId] = { ...node, parentId: newParentId };
-        // If was a root, remove from rootNodeIds
         const newRootIds = (m.rootNodeIds || [m.rootNodeId]).filter(r => r !== nodeId);
         return {
           ...m,
@@ -685,6 +741,88 @@ export const useMapStore = create<MapState>((set, get) => ({
     }));
   },
 
+  addCrossConnector: (fromId, toId) => {
+    const id = get().activeMapId;
+    if (!id) return '';
+    const ccId = uuid();
+    const cc: CrossConnector = { id: ccId, fromId, toId, color: '#6C5CE7' };
+    get().pushHistory();
+    set(s => ({
+      maps: s.maps.map(m => {
+        if (m.id !== id) return m;
+        // Avoid duplicates
+        const existing = (m.crossConnectors || []).find(
+          c => (c.fromId === fromId && c.toId === toId) || (c.fromId === toId && c.toId === fromId)
+        );
+        if (existing) return m;
+        return { ...m, crossConnectors: [...(m.crossConnectors || []), cc] };
+      }),
+    }));
+    return ccId;
+  },
+
+  removeCrossConnector: (id) => {
+    const mapId = get().activeMapId;
+    if (!mapId) return;
+    get().pushHistory();
+    set(s => ({
+      maps: s.maps.map(m => {
+        if (m.id !== mapId) return m;
+        return { ...m, crossConnectors: (m.crossConnectors || []).filter(cc => cc.id !== id) };
+      }),
+    }));
+  },
+
+  updateMapFromAI: (mapId, data) => {
+    set(s => ({
+      maps: s.maps.map(m => {
+        if (m.id !== mapId) return m;
+        const nodes: Record<string, MindMapNode> = { ...m.nodes };
+        const rootNode = Object.values(nodes).find(n => !n.parentId);
+        if (!rootNode) return m;
+        // Update root text
+        nodes[rootNode.id] = { ...rootNode, content: { ...rootNode.content, text: data.root } };
+        // Build branch nodes
+        data.branches.forEach(branch => {
+          const branchId = uuid();
+          const branchNode: MindMapNode = {
+            id: branchId,
+            parentId: rootNode.id,
+            childrenIds: [],
+            content: { text: branch.text, note: '', attachments: [] },
+            style: { ...DEFAULT_STYLE },
+            position: { x: 0, y: 0, collapsed: false },
+            comments: [],
+            sequenceLabel: null,
+          };
+          nodes[rootNode.id] = { ...nodes[rootNode.id], childrenIds: [...nodes[rootNode.id].childrenIds, branchId] };
+          nodes[branchId] = branchNode;
+          branch.children.forEach(childText => {
+            const childId = uuid();
+            nodes[childId] = {
+              id: childId,
+              parentId: branchId,
+              childrenIds: [],
+              content: { text: childText, note: '', attachments: [] },
+              style: { ...DEFAULT_STYLE },
+              position: { x: 0, y: 0, collapsed: false },
+              comments: [],
+              sequenceLabel: null,
+            };
+            nodes[branchId] = { ...nodes[branchId], childrenIds: [...nodes[branchId].childrenIds, childId] };
+          });
+        });
+        return { ...m, nodes };
+      }),
+    }));
+    // Recompute layout
+    const prevActiveMapId = get().activeMapId;
+    set(() => ({ activeMapId: mapId }));
+    get().recomputeLayout();
+    set(() => ({ activeMapId: prevActiveMapId }));
+    get().save();
+  },
+
   recomputeLayout: () => {
     const { maps, activeMapId } = get();
     const map = maps.find(m => m.id === activeMapId);
@@ -692,12 +830,10 @@ export const useMapStore = create<MapState>((set, get) => ({
 
     const allPositions: { id: string; x: number; y: number }[] = [];
 
-    // Layout each root independently
     const rootIds = map.rootNodeIds || [map.rootNodeId];
     let offsetX = 0;
     for (const rootId of rootIds) {
       const positions = computeRadialLayout(rootId, map.nodes, map.settings.direction);
-      // Shift additional roots to avoid overlap
       for (const p of positions) {
         allPositions.push({ id: p.id, x: p.x + offsetX, y: p.y });
       }
@@ -725,6 +861,7 @@ export const useMapStore = create<MapState>((set, get) => ({
       nodes: JSON.parse(JSON.stringify(map.nodes)),
       stickyNotes: JSON.parse(JSON.stringify(map.stickyNotes)),
       rootNodeIds: [...(map.rootNodeIds || [map.rootNodeId])],
+      crossConnectors: JSON.parse(JSON.stringify(map.crossConnectors || [])),
     };
     set(s => ({ past: [...s.past.slice(-49), entry], future: [] }));
   },
@@ -739,13 +876,14 @@ export const useMapStore = create<MapState>((set, get) => ({
       nodes: JSON.parse(JSON.stringify(map.nodes)),
       stickyNotes: JSON.parse(JSON.stringify(map.stickyNotes)),
       rootNodeIds: [...(map.rootNodeIds || [map.rootNodeId])],
+      crossConnectors: JSON.parse(JSON.stringify(map.crossConnectors || [])),
     };
     set(s => ({
       past: s.past.slice(0, -1),
       future: [...s.future, current],
       maps: s.maps.map(m =>
         m.id === activeMapId
-          ? { ...m, nodes: prev.nodes, stickyNotes: prev.stickyNotes, rootNodeIds: prev.rootNodeIds }
+          ? { ...m, nodes: prev.nodes, stickyNotes: prev.stickyNotes, rootNodeIds: prev.rootNodeIds, crossConnectors: prev.crossConnectors }
           : m
       ),
     }));
@@ -761,13 +899,14 @@ export const useMapStore = create<MapState>((set, get) => ({
       nodes: JSON.parse(JSON.stringify(map.nodes)),
       stickyNotes: JSON.parse(JSON.stringify(map.stickyNotes)),
       rootNodeIds: [...(map.rootNodeIds || [map.rootNodeId])],
+      crossConnectors: JSON.parse(JSON.stringify(map.crossConnectors || [])),
     };
     set(s => ({
       future: s.future.slice(0, -1),
       past: [...s.past, current],
       maps: s.maps.map(m =>
         m.id === activeMapId
-          ? { ...m, nodes: next.nodes, stickyNotes: next.stickyNotes, rootNodeIds: next.rootNodeIds }
+          ? { ...m, nodes: next.nodes, stickyNotes: next.stickyNotes, rootNodeIds: next.rootNodeIds, crossConnectors: next.crossConnectors }
           : m
       ),
     }));

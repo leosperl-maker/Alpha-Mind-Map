@@ -9,8 +9,14 @@ import { PersonalizePanel } from '../components/Panels/PersonalizePanel';
 import { NotesPanel } from '../components/Panels/NotesPanel';
 import { ExportPanel } from '../components/Panels/ExportPanel';
 import { SharePanel } from '../components/Panels/SharePanel';
+import { AIPanel } from '../components/Panels/AIPanel';
 import { ContextMenu } from '../components/common/ContextMenu';
 import { SearchBar } from '../components/common/SearchBar';
+import { FocusModeBanner } from '../components/common/FocusMode';
+import { KeyboardShortcutsPanel } from '../components/common/KeyboardShortcutsPanel';
+import { MapStats } from '../components/common/MapStats';
+import { ImageLightbox } from '../components/Canvas/ImageLightbox';
+import { AIGhostNodes } from '../components/Canvas/AIGhostNodes';
 
 export const MapEditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -51,8 +57,14 @@ export const MapEditorPage: React.FC = () => {
       <NotesPanel />
       <ExportPanel />
       <SharePanel />
+      <AIPanel />
       <ContextMenu />
       <SearchBar />
+      <FocusModeBanner />
+      <KeyboardShortcutsPanel />
+      <MapStats />
+      <ImageLightbox />
+      <AIGhostNodes />
     </div>
   );
 };

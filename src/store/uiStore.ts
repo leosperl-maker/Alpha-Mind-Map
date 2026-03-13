@@ -1,12 +1,17 @@
 import { create } from 'zustand';
 
-export type ActivePanel = 'personalize' | 'notes' | 'comments' | 'share' | 'export' | null;
+export type ActivePanel = 'personalize' | 'notes' | 'comments' | 'share' | 'export' | 'ai' | null;
 export type AppView = 'dashboard' | 'editor';
 
 export interface ContextMenuState {
   x: number;
   y: number;
   nodeId: string;
+}
+
+export interface AISuggestionItem {
+  id: string;
+  text: string;
 }
 
 interface UIState {
@@ -16,7 +21,7 @@ interface UIState {
   selectedNodeIds: string[];
   editingNodeId: string | null;
   hoveredNodeId: string | null;
-  selectedConnectorId: string | null; // "parentId-childId"
+  selectedConnectorId: string | null;
   contextMenu: ContextMenuState | null;
   searchQuery: string;
   searchResults: string[];
@@ -26,6 +31,15 @@ interface UIState {
   panX: number;
   panY: number;
   saveStatus: 'saved' | 'saving' | 'unsaved';
+
+  focusModeNodeId: string | null;
+  lightboxImage: string | null;
+  aiSuggestions: { parentId: string; items: AISuggestionItem[] } | null;
+  aiLoading: boolean;
+  aiImproveOptions: string[] | null;
+  pendingCrossConnect: string | null;
+  showKeyboardShortcuts: boolean;
+  showMapStats: boolean;
 
   setView: (v: AppView) => void;
   setActivePanel: (p: ActivePanel) => void;
@@ -44,6 +58,15 @@ interface UIState {
   setPan: (x: number, y: number) => void;
   setSaveStatus: (s: 'saved' | 'saving' | 'unsaved') => void;
   fitToScreen: (canvasW: number, canvasH: number, contentBounds: { minX: number; minY: number; maxX: number; maxY: number }) => void;
+
+  setFocusMode: (nodeId: string | null) => void;
+  setLightboxImage: (url: string | null) => void;
+  setAISuggestions: (v: { parentId: string; items: AISuggestionItem[] } | null) => void;
+  setAILoading: (v: boolean) => void;
+  setAIImproveOptions: (v: string[] | null) => void;
+  setPendingCrossConnect: (nodeId: string | null) => void;
+  setShowKeyboardShortcuts: (v: boolean) => void;
+  setShowMapStats: (v: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -63,6 +86,15 @@ export const useUIStore = create<UIState>((set) => ({
   panX: 0,
   panY: 0,
   saveStatus: 'saved',
+
+  focusModeNodeId: null,
+  lightboxImage: null,
+  aiSuggestions: null,
+  aiLoading: false,
+  aiImproveOptions: null,
+  pendingCrossConnect: null,
+  showKeyboardShortcuts: false,
+  showMapStats: false,
 
   setView: (v) => set({ view: v }),
   setActivePanel: (p) => set(s => ({ activePanel: s.activePanel === p ? null : p })),
@@ -85,6 +117,15 @@ export const useUIStore = create<UIState>((set) => ({
   setZoom: (z) => set({ zoom: Math.max(0.2, Math.min(3, z)) }),
   setPan: (x, y) => set({ panX: x, panY: y }),
   setSaveStatus: (s) => set({ saveStatus: s }),
+
+  setFocusMode: (nodeId) => set({ focusModeNodeId: nodeId }),
+  setLightboxImage: (url) => set({ lightboxImage: url }),
+  setAISuggestions: (v) => set({ aiSuggestions: v }),
+  setAILoading: (v) => set({ aiLoading: v }),
+  setAIImproveOptions: (v) => set({ aiImproveOptions: v }),
+  setPendingCrossConnect: (nodeId) => set({ pendingCrossConnect: nodeId }),
+  setShowKeyboardShortcuts: (v) => set({ showKeyboardShortcuts: v }),
+  setShowMapStats: (v) => set({ showMapStats: v }),
 
   fitToScreen: (canvasW, canvasH, bounds) => {
     const padding = 100;

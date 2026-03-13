@@ -15,7 +15,7 @@ export const TopToolbar: React.FC = () => {
   const redo = useMapStore(s => s.redo);
   const addRootNode = useMapStore(s => s.addRootNode);
 
-  const { activePanel, setActivePanel, showMinimap, toggleMinimap, saveStatus, searchOpen, setSearchOpen } = useUIStore();
+  const { activePanel, setActivePanel, showMinimap, toggleMinimap, saveStatus, searchOpen, setSearchOpen, showKeyboardShortcuts, setShowKeyboardShortcuts, showMapStats, setShowMapStats } = useUIStore();
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -43,6 +43,7 @@ export const TopToolbar: React.FC = () => {
     { key: null, label: 'Build' },
     { key: 'personalize', label: 'Personnaliser' },
     { key: 'notes', label: 'Notes' },
+    { key: 'ai', label: '✨ IA' },
   ];
 
   // Mobile bottom sheet menu
@@ -335,6 +336,16 @@ export const TopToolbar: React.FC = () => {
           style={{ ...iconBtnStyle, color: searchOpen ? ALPHA_COLORS.primary : '#636E72' }}
           title="Rechercher (Ctrl+F)"
         >🔍</button>
+        <button
+          onClick={() => setShowMapStats(!showMapStats)}
+          style={{ ...iconBtnStyle, color: showMapStats ? ALPHA_COLORS.primary : '#636E72' }}
+          title="Statistiques de la map"
+        >📊</button>
+        <button
+          onClick={() => setShowKeyboardShortcuts(!showKeyboardShortcuts)}
+          style={{ ...iconBtnStyle, color: showKeyboardShortcuts ? ALPHA_COLORS.primary : '#636E72', fontSize: 14 }}
+          title="Raccourcis clavier (?)"
+        >?</button>
 
         <div style={{ width: 1, height: 28, background: '#DFE6E9', margin: '0 2px' }} />
 
