@@ -345,6 +345,20 @@ export const NodeToolbar: React.FC = () => {
 
       <Divider />
 
+      {/* Quick attach image */}
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        style={{
+          ...toolBtnStyle,
+          background: 'transparent', color: '#636E72',
+          fontSize: 15, padding: isMobile ? '8px' : '2px 6px', borderRadius: 4,
+          border: '1px solid #DFE6E9',
+          minWidth: isMobile ? 44 : undefined, minHeight: isMobile ? 44 : undefined,
+        }}
+        title="Joindre une image"
+        aria-label="Joindre une image"
+      >📎</button>
+
       {/* Media menu */}
       <div style={{ position: 'relative' }}>
         <button
