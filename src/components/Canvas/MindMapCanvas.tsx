@@ -63,7 +63,7 @@ export const MindMapCanvas: React.FC = () => {
   const addSiblingNode = useMapStore(s => s.addSiblingNode);
   const deleteNode = useMapStore(s => s.deleteNode);
   const moveNode = useMapStore(s => s.moveNode);
-  const updateNodePosition = useMapStore(s => s.updateNodePosition);
+  const batchUpdateNodePositions = useMapStore(s => s.batchUpdateNodePositions);
   const updateNodeMedia = useMapStore(s => s.updateNodeMedia);
   const addCrossConnector = useMapStore(s => s.addCrossConnector);
   const undo = useMapStore(s => s.undo);
@@ -91,6 +91,7 @@ export const MindMapCanvas: React.FC = () => {
     startWorldX: number;
     startWorldY: number;
     dragged: boolean;
+    subtreeStartPositions: Map<string, { x: number; y: number }>;
   } | null>(null);
 
   const touchStartRef = useRef<{ x: number; y: number; time: number; dist: number } | null>(null);
@@ -183,7 +184,13 @@ export const MindMapCanvas: React.FC = () => {
       const dy = e.clientY - dr.startClientY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
         dr.dragged = true;
-        updateNodePosition(dr.nodeId, dr.startWorldX + dx / zoom, dr.startWorldY + dy / zoom);
+        const dxWorld = dx / zoom;
+        const dyWorld = dy / zoom;
+        const updates: Array<{ id: string; x: number; y: number }> = [];
+        dr.subtreeStartPositions.forEach(({ x, y }, id) => {
+          updates.push({ id, x: x + dxWorld, y: y + dyWorld });
+        });
+        batchUpdateNodePositions(updates);
       }
       return;
     }
@@ -193,7 +200,7 @@ export const MindMapCanvas: React.FC = () => {
       const dy = e.clientY - panStart.current.y;
       setPan(panStart.current.panX + dx, panStart.current.panY + dy);
     }
-  }, [setPan, zoom, updateNodePosition]);
+  }, [setPan, zoom, batchUpdateNodePositions]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     if (isPanning.current) {
@@ -280,6 +287,11 @@ export const MindMapCanvas: React.FC = () => {
     if (!node) return;
     isPanning.current = false;
     setIsPanningActive(false);
+    const subtreeStartPositions = new Map<string, { x: number; y: number }>();
+    collectSubtreeIds(nodeId, map.nodes).forEach(id => {
+      const n = map.nodes[id];
+      if (n) subtreeStartPositions.set(id, { x: n.position.x, y: n.position.y });
+    });
     nodeDragRef.current = {
       nodeId,
       startClientX: e.clientX,
@@ -287,6 +299,7 @@ export const MindMapCanvas: React.FC = () => {
       startWorldX: node.position.x,
       startWorldY: node.position.y,
       dragged: false,
+      subtreeStartPositions,
     };
   }, [map]);
 
@@ -310,6 +323,11 @@ export const MindMapCanvas: React.FC = () => {
         isPanning.current = false;
         touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now(), dist: 0 };
         touchPanRef.current = null;
+        const subtreeStartPositions = new Map<string, { x: number; y: number }>();
+        collectSubtreeIds(nodeId, map.nodes).forEach(id => {
+          const n = map.nodes[id];
+          if (n) subtreeStartPositions.set(id, { x: n.position.x, y: n.position.y });
+        });
         nodeDragRef.current = {
           nodeId,
           startClientX: t.clientX,
@@ -317,6 +335,7 @@ export const MindMapCanvas: React.FC = () => {
           startWorldX: node.position.x,
           startWorldY: node.position.y,
           dragged: false,
+          subtreeStartPositions,
         };
         return;
       }
@@ -359,7 +378,13 @@ export const MindMapCanvas: React.FC = () => {
       const dy = t.clientY - dr.startClientY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
         dr.dragged = true;
-        updateNodePosition(dr.nodeId, dr.startWorldX + dx / zoom, dr.startWorldY + dy / zoom);
+        const dxWorld = dx / zoom;
+        const dyWorld = dy / zoom;
+        const updates: Array<{ id: string; x: number; y: number }> = [];
+        dr.subtreeStartPositions.forEach(({ x, y }, id) => {
+          updates.push({ id, x: x + dxWorld, y: y + dyWorld });
+        });
+        batchUpdateNodePositions(updates);
       }
       return;
     }
@@ -378,7 +403,7 @@ export const MindMapCanvas: React.FC = () => {
       setZoom(newZoom);
       setPan(midX - (midX - panX) * (newZoom / zoom), midY - (midY - panY) * (newZoom / zoom));
     }
-  }, [panX, panY, zoom, setPan, setZoom, updateNodePosition]);
+  }, [panX, panY, zoom, setPan, setZoom, batchUpdateNodePositions]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
