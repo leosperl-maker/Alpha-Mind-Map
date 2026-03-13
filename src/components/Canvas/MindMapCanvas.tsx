@@ -6,6 +6,7 @@ import { Connector } from './Connector';
 import { StickyNote } from './StickyNote';
 import { Minimap } from './Minimap';
 import { CrossConnectorLayer } from './CrossConnectorLayer';
+import { getNodeDimensions } from '../../utils/layout';
 import type { MindMapNode, NodeMedia } from '../../types';
 
 function getNodeDepth(nodeId: string, nodes: Record<string, MindMapNode>): number {
@@ -64,6 +65,7 @@ export const MindMapCanvas: React.FC = () => {
   const deleteNode = useMapStore(s => s.deleteNode);
   const moveNode = useMapStore(s => s.moveNode);
   const batchUpdateNodePositions = useMapStore(s => s.batchUpdateNodePositions);
+  const updateNodePosition = useMapStore(s => s.updateNodePosition);
   const updateNodeMedia = useMapStore(s => s.updateNodeMedia);
   const addCrossConnector = useMapStore(s => s.addCrossConnector);
   const undo = useMapStore(s => s.undo);
@@ -280,6 +282,28 @@ export const MindMapCanvas: React.FC = () => {
     setSelectedNode(newId);
     setTimeout(() => setEditingNode(newId), 50);
   }, [addNodeOnSide, setSelectedNode, setEditingNode]);
+
+  const handleAddChildTop = useCallback((nodeId: string) => {
+    if (!map) return;
+    const parent = map.nodes[nodeId];
+    if (!parent) return;
+    const dims = getNodeDimensions(parent);
+    const newId = addNode(nodeId);
+    updateNodePosition(newId, parent.position.x, parent.position.y - dims.h - 60);
+    setSelectedNode(newId);
+    setTimeout(() => setEditingNode(newId), 50);
+  }, [map, addNode, updateNodePosition, setSelectedNode, setEditingNode]);
+
+  const handleAddChildBottom = useCallback((nodeId: string) => {
+    if (!map) return;
+    const parent = map.nodes[nodeId];
+    if (!parent) return;
+    const dims = getNodeDimensions(parent);
+    const newId = addNode(nodeId);
+    updateNodePosition(newId, parent.position.x, parent.position.y + dims.h + 60);
+    setSelectedNode(newId);
+    setTimeout(() => setEditingNode(newId), 50);
+  }, [map, addNode, updateNodePosition, setSelectedNode, setEditingNode]);
 
   const handleNodeDragStart = useCallback((nodeId: string, e: React.MouseEvent) => {
     if (!map) return;
@@ -633,7 +657,9 @@ export const MindMapCanvas: React.FC = () => {
             onSelect={handleNodeSelect}
             onDoubleClick={handleNodeDoubleClick}
             onAddChild={handleAddChild}
-            onAddChildLeft={rootIds.includes(node.id) ? handleAddChildLeft : undefined}
+            onAddChildLeft={handleAddChildLeft}
+            onAddChildTop={handleAddChildTop}
+            onAddChildBottom={handleAddChildBottom}
             onDragStart={handleNodeDragStart}
             onContextMenu={handleContextMenu}
           />

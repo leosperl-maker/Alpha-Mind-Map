@@ -19,16 +19,23 @@ interface MindNodeProps {
   onDoubleClick: (id: string) => void;
   onAddChild: (id: string) => void;
   onAddChildLeft?: (id: string) => void;
+  onAddChildTop?: (id: string) => void;
+  onAddChildBottom?: (id: string) => void;
   onDragStart: (id: string, e: React.MouseEvent) => void;
   onContextMenu: (id: string, e: React.MouseEvent) => void;
 }
 
 const FONT_SIZE_MAP = { xs: 11, s: 12, m: 14, l: 17, xl: 21 };
 
+const ADD_BTN_SIZE = 22;
+const ADD_BTN_OFFSET = 28;
+
 export const MindNode: React.FC<MindNodeProps> = ({
   node, isRoot, isSelected, isMultiSelected, isEditing,
   mapStyle, themeColor, depth,
-  onSelect, onDoubleClick, onAddChild, onAddChildLeft, onDragStart, onContextMenu,
+  onSelect, onDoubleClick, onAddChild, onAddChildLeft,
+  onAddChildTop, onAddChildBottom,
+  onDragStart, onContextMenu,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { setEditingNode, setHoveredNode, hoveredNodeId } = useUIStore();
@@ -108,8 +115,41 @@ export const MindNode: React.FC<MindNodeProps> = ({
   const hasNote = node.content.note.trim().length > 0;
   const hasAttachments = node.content.attachments.length > 0;
 
-  // If media present, use flexible width
   const nodeWidth = hasMedia ? Math.max(dims.w, 180) : dims.w;
+  const showAddButtons = (isHovered || isSelected) && !isEditing && !node.position.collapsed;
+
+  // Shared add button style factory
+  const addBtnStyle = (extraStyle: React.CSSProperties): React.CSSProperties => ({
+    position: 'absolute',
+    width: ADD_BTN_SIZE,
+    height: ADD_BTN_SIZE,
+    borderRadius: '50%',
+    background: themeColor,
+    border: 'none',
+    cursor: 'pointer',
+    color: '#fff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 16,
+    lineHeight: 1,
+    zIndex: 10,
+    opacity: 0.8,
+    transition: 'opacity 120ms, transform 120ms',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+    ...extraStyle,
+  });
+
+  const addBtnHover = (base: React.CSSProperties, transform: string) => ({
+    onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.currentTarget.style.opacity = '1';
+      e.currentTarget.style.transform = transform.replace('scale(1)', 'scale(1.1)');
+    },
+    onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.currentTarget.style.opacity = '0.8';
+      e.currentTarget.style.transform = transform;
+    },
+  });
 
   return (
     <div
@@ -203,81 +243,114 @@ export const MindNode: React.FC<MindNodeProps> = ({
             <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#74B9FF', border: '1.5px solid white' }} title="Has attachments" />
           )}
         </div>
+
+        {/* Collapse/Expand button — inside the node, bottom-right corner */}
+        {hasChildren && (
+          <button
+            onClick={(e) => { e.stopPropagation(); toggleCollapse(node.id); }}
+            onDoubleClick={e => e.stopPropagation()}
+            onMouseDown={e => e.stopPropagation()}
+            style={{
+              position: 'absolute',
+              bottom: 3,
+              right: 5,
+              width: 14,
+              height: 14,
+              borderRadius: '50%',
+              background: hexToRgba(themeColor, 0.15),
+              border: `1px solid ${hexToRgba(themeColor, 0.5)}`,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 9,
+              color: themeColor,
+              zIndex: 10,
+              lineHeight: 1,
+              padding: 0,
+              transition: 'background 120ms',
+            }}
+            aria-label={node.position.collapsed ? 'Expand' : 'Collapse'}
+            title={node.position.collapsed ? 'Développer' : 'Réduire'}
+          >
+            {node.position.collapsed ? '+' : '−'}
+          </button>
+        )}
       </div>
 
-      {/* Collapse/Expand */}
-      {hasChildren && (
-        <button
-          onClick={(e) => { e.stopPropagation(); toggleCollapse(node.id); }}
-          onDoubleClick={e => e.stopPropagation()}
-          style={{
-            position: 'absolute',
-            right: node.position.side !== 'left' ? -10 : 'auto',
-            left: node.position.side === 'left' ? -10 : 'auto',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            width: 16, height: 16, borderRadius: '50%',
-            background: '#fff', border: `1.5px solid ${themeColor}`,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 10, color: themeColor, zIndex: 10, lineHeight: 1,
-          }}
-          onMouseDown={e => e.stopPropagation()}
-          aria-label={node.position.collapsed ? 'Expand' : 'Collapse'}
-        >
-          {node.position.collapsed ? '+' : '−'}
-        </button>
-      )}
+      {/* ── Add child buttons (visible on hover/select) ── */}
 
-      {/* Add child button */}
-      {(isHovered || isSelected) && !isEditing && !node.position.collapsed && (
+      {/* RIGHT */}
+      {showAddButtons && (
         <button
           onClick={(e) => { e.stopPropagation(); onAddChild(node.id); }}
           onDoubleClick={e => e.stopPropagation()}
           onMouseDown={e => e.stopPropagation()}
-          style={{
-            position: 'absolute',
-            right: node.position.side !== 'left' ? -26 : 'auto',
-            left: node.position.side === 'left' ? -26 : 'auto',
+          style={addBtnStyle({
+            right: -ADD_BTN_OFFSET,
             top: '50%',
             transform: 'translateY(-50%)',
-            width: 22, height: 22, borderRadius: '50%',
-            background: themeColor, border: 'none', cursor: 'pointer',
-            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 16, lineHeight: 1, zIndex: 10, opacity: 0.8,
-            transition: 'opacity 120ms, transform 120ms',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)'; }}
-          onMouseLeave={e => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.transform = 'translateY(-50%) scale(1)'; }}
-          title="Add child node (Tab)"
-          aria-label="Add child node"
+          })}
+          {...addBtnHover({}, 'translateY(-50%) scale(1)')}
+          title="Ajouter un enfant à droite (Tab)"
+          aria-label="Add child node right"
         >
           +
         </button>
       )}
 
-      {/* Left add child button — root node only */}
-      {isRoot && onAddChildLeft && (isHovered || isSelected) && !isEditing && (
+      {/* LEFT */}
+      {showAddButtons && onAddChildLeft && (
         <button
           onClick={(e) => { e.stopPropagation(); onAddChildLeft(node.id); }}
           onDoubleClick={e => e.stopPropagation()}
           onMouseDown={e => e.stopPropagation()}
-          style={{
-            position: 'absolute',
-            left: -26,
+          style={addBtnStyle({
+            left: -ADD_BTN_OFFSET,
             top: '50%',
             transform: 'translateY(-50%)',
-            width: 22, height: 22, borderRadius: '50%',
-            background: themeColor, border: 'none', cursor: 'pointer',
-            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 16, lineHeight: 1, zIndex: 10, opacity: 0.8,
-            transition: 'opacity 120ms, transform 120ms',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)'; }}
-          onMouseLeave={e => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.transform = 'translateY(-50%) scale(1)'; }}
+          })}
+          {...addBtnHover({}, 'translateY(-50%) scale(1)')}
           title="Ajouter un enfant à gauche"
           aria-label="Add child node left"
+        >
+          +
+        </button>
+      )}
+
+      {/* TOP */}
+      {showAddButtons && onAddChildTop && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onAddChildTop(node.id); }}
+          onDoubleClick={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+          style={addBtnStyle({
+            top: -ADD_BTN_OFFSET,
+            left: '50%',
+            transform: 'translateX(-50%)',
+          })}
+          {...addBtnHover({}, 'translateX(-50%) scale(1)')}
+          title="Ajouter un enfant au-dessus"
+          aria-label="Add child node above"
+        >
+          +
+        </button>
+      )}
+
+      {/* BOTTOM */}
+      {showAddButtons && onAddChildBottom && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onAddChildBottom(node.id); }}
+          onDoubleClick={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+          style={addBtnStyle({
+            bottom: -ADD_BTN_OFFSET,
+            left: '50%',
+            transform: 'translateX(-50%)',
+          })}
+          {...addBtnHover({}, 'translateX(-50%) scale(1)')}
+          title="Ajouter un enfant en dessous"
+          aria-label="Add child node below"
         >
           +
         </button>
