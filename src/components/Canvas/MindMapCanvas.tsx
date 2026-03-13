@@ -95,6 +95,7 @@ export const MindMapCanvas: React.FC = () => {
 
   const touchStartRef = useRef<{ x: number; y: number; time: number; dist: number } | null>(null);
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const isCreatingStickyNoteRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchPanRef = useRef<{ panX: number; panY: number; x: number; y: number } | null>(null);
   const pinchRef = useRef<{ dist: number; zoom: number; midX: number; midY: number } | null>(null);
@@ -423,10 +424,14 @@ export const MindMapCanvas: React.FC = () => {
           const tapDt = Date.now() - lastTapRef.current.time;
           const tapDist = Math.sqrt(Math.pow(t.clientX - lastTapRef.current.x, 2) + Math.pow(t.clientY - lastTapRef.current.y, 2));
           if (tapDt < 300 && tapDist < 30) {
-            const rect = containerRef.current!.getBoundingClientRect();
-            const wx = (t.clientX - rect.left - panX) / zoom;
-            const wy = (t.clientY - rect.top - panY) / zoom;
-            addStickyNote(wx, wy);
+            if (!isCreatingStickyNoteRef.current) {
+              isCreatingStickyNoteRef.current = true;
+              const rect = containerRef.current!.getBoundingClientRect();
+              const wx = (t.clientX - rect.left - panX) / zoom;
+              const wy = (t.clientY - rect.top - panY) / zoom;
+              addStickyNote(wx, wy);
+              setTimeout(() => { isCreatingStickyNoteRef.current = false; }, 300);
+            }
             lastTapRef.current = null; touchStartRef.current = null;
             return;
           }
