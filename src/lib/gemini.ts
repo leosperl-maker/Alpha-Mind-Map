@@ -1,6 +1,8 @@
 // Gemini API client — used for all IA features in Alpha Mind Map
-// Free tier: 1000 req/day, 15 req/min with VITE_GEMINI_API_KEY shared key
-// Users can supply their own key in Settings > IA
+// Default key is hardcoded in config.ts (required for GitHub Pages where .env is not deployed).
+// Users can supply their own key in Settings > IA to override it.
+
+import { GEMINI_API_KEY } from './config';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-preview-05-20';
@@ -12,12 +14,9 @@ export async function callGemini(
   maxTokens = 1000,
   expectJson = true,
 ): Promise<string> {
-  const key = userApiKey || (import.meta.env.VITE_GEMINI_API_KEY as string);
+  const key = userApiKey || GEMINI_API_KEY;
   if (!key) {
-    throw new Error(
-      'Clé API Gemini manquante. Configurez votre clé dans Paramètres > IA, ' +
-      'ou ajoutez VITE_GEMINI_API_KEY dans votre fichier .env.',
-    );
+    throw new Error('Clé API Gemini manquante. Configurez votre clé dans Paramètres > IA.');
   }
 
   const generationConfig: Record<string, unknown> = {
