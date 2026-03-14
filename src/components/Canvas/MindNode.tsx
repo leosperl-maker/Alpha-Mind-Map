@@ -140,7 +140,7 @@ export const MindNode: React.FC<MindNodeProps> = ({
     ...extraStyle,
   });
 
-  const addBtnHover = (base: React.CSSProperties, transform: string) => ({
+  const addBtnHover = (_base: React.CSSProperties, transform: string) => ({
     onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => {
       e.currentTarget.style.opacity = '1';
       e.currentTarget.style.transform = transform.replace('scale(1)', 'scale(1.1)');
