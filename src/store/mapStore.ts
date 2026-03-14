@@ -866,13 +866,33 @@ export const useMapStore = create<MapState>((set, get) => ({
       if (rootIds.length > 1) offsetX += 800;
     }
 
+    // Build a lookup of layout-computed positions (root at 0,0)
+    const layoutPosMap: Record<string, { x: number; y: number }> = {};
+    for (const p of allPositions) {
+      layoutPosMap[p.id] = { x: p.x, y: p.y };
+    }
+
     set(s => ({
       maps: s.maps.map(m => {
         if (m.id !== activeMapId) return m;
         const newNodes = { ...m.nodes };
         for (const { id, x, y } of allPositions) {
           if (newNodes[id] && !newNodes[id].position.manuallyPositioned) {
-            newNodes[id] = { ...newNodes[id], position: { ...newNodes[id].position, x, y } };
+            // Find the closest manually-positioned ancestor and apply its offset
+            // so new children appear near their parent's actual (dragged) position.
+            let dx = 0, dy = 0;
+            let cur = newNodes[id].parentId;
+            while (cur) {
+              const ancestor = newNodes[cur];
+              if (!ancestor) break;
+              if (ancestor.position.manuallyPositioned && layoutPosMap[cur]) {
+                dx = ancestor.position.x - layoutPosMap[cur].x;
+                dy = ancestor.position.y - layoutPosMap[cur].y;
+                break;
+              }
+              cur = ancestor.parentId;
+            }
+            newNodes[id] = { ...newNodes[id], position: { ...newNodes[id].position, x: x + dx, y: y + dy } };
           }
         }
         return { ...m, nodes: newNodes };
