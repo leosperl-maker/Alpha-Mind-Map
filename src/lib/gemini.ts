@@ -5,7 +5,7 @@
 import { GEMINI_API_KEY } from './config';
 
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-preview-05-20';
+export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 
 export async function callGemini(
   prompt: string,
