@@ -10,6 +10,13 @@ body {
   background: #F8F9FA;
   color: #2D3436;
   overflow: hidden;
+  /* iOS safe-area: ensures content never hides behind the home indicator */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Utility: add iPhone home-bar clearance to any fixed bottom element */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
 }
 
 #root {

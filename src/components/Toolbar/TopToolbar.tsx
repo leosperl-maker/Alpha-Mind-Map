@@ -61,7 +61,7 @@ export const TopToolbar: React.FC = () => {
             position: 'relative', background: '#fff',
             borderRadius: '16px 16px 0 0',
             boxShadow: '0 -4px 32px rgba(0,0,0,0.18)',
-            paddingBottom: 24,
+            paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
           }}
           onClick={e => e.stopPropagation()}
         >

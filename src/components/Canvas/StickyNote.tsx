@@ -10,88 +10,38 @@ interface StickyNoteProps {
 
 export const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
   const { updateStickyNote, deleteStickyNote } = useMapStore();
-  const zoom = useUIStore(s => s.zoom);
-  const dragRef = useRef<{ startX: number; startY: number; noteX: number; noteY: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; noteX: number; noteY: number; zoom: number } | null>(null);
   const resizeRef = useRef<{ startX: number; startY: number; startW: number; startH: number } | null>(null);
   const [showColors, setShowColors] = useState(false);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  // ── Drag: pointer events + setPointerCapture (same system as nodes) ──────────
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
     if ((e.target as HTMLElement).closest('.sticky-resize')) return;
-    if ((e.target as HTMLElement).closest('.sticky-controls')) return;
     e.stopPropagation();
-    e.preventDefault();
-    dragRef.current = { startX: e.clientX, startY: e.clientY, noteX: note.x, noteY: note.y };
-
-    const currentZoom = useUIStore.getState().zoom;
-    const onMove = (me: MouseEvent) => {
-      if (!dragRef.current) return;
-      // Divide screen-pixel delta by zoom to get world-coordinate delta
-      updateStickyNote(note.id, {
-        x: dragRef.current.noteX + (me.clientX - dragRef.current.startX) / currentZoom,
-        y: dragRef.current.noteY + (me.clientY - dragRef.current.startY) / currentZoom,
-      });
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      noteX: note.x,
+      noteY: note.y,
+      zoom: useUIStore.getState().zoom,
     };
-    const onUp = () => {
-      dragRef.current = null;
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
-    if ((e.target as HTMLElement).closest('.sticky-resize')) return;
-    if ((e.target as HTMLElement).closest('.sticky-controls')) return;
-    if (e.touches.length !== 1) return;
-    e.stopPropagation();
-    const t = e.touches[0];
-    dragRef.current = { startX: t.clientX, startY: t.clientY, noteX: note.x, noteY: note.y };
-    const currentZoom = useUIStore.getState().zoom;
-    const onMove = (me: TouchEvent) => {
-      me.preventDefault();
-      if (!dragRef.current || me.touches.length !== 1) return;
-      const touch = me.touches[0];
-      updateStickyNote(note.id, {
-        x: dragRef.current.noteX + (touch.clientX - dragRef.current.startX) / currentZoom,
-        y: dragRef.current.noteY + (touch.clientY - dragRef.current.startY) / currentZoom,
-      });
-    };
-    const onEnd = () => {
-      dragRef.current = null;
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onEnd);
-    };
-    window.addEventListener('touchmove', onMove, { passive: false });
-    window.addEventListener('touchend', onEnd);
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    updateStickyNote(note.id, {
+      x: dragRef.current.noteX + (e.clientX - dragRef.current.startX) / dragRef.current.zoom,
+      y: dragRef.current.noteY + (e.clientY - dragRef.current.startY) / dragRef.current.zoom,
+    });
   };
 
-  const handleResizeTouchStart = (e: React.TouchEvent) => {
-    e.stopPropagation();
-    if (e.touches.length !== 1) return;
-    const t = e.touches[0];
-    resizeRef.current = { startX: t.clientX, startY: t.clientY, startW: note.width, startH: note.height };
-    const currentZoom = useUIStore.getState().zoom;
-    const onMove = (me: TouchEvent) => {
-      me.preventDefault();
-      if (!resizeRef.current || me.touches.length !== 1) return;
-      const touch = me.touches[0];
-      updateStickyNote(note.id, {
-        width: Math.max(120, resizeRef.current.startW + (touch.clientX - resizeRef.current.startX) / currentZoom),
-        height: Math.max(80, resizeRef.current.startH + (touch.clientY - resizeRef.current.startY) / currentZoom),
-      });
-    };
-    const onEnd = () => {
-      resizeRef.current = null;
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onEnd);
-    };
-    window.addEventListener('touchmove', onMove, { passive: false });
-    window.addEventListener('touchend', onEnd);
+  const handlePointerUp = () => {
+    dragRef.current = null;
   };
 
+  // ── Resize: mouse ─────────────────────────────────────────────────────────────
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -116,14 +66,36 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
     window.addEventListener('mouseup', onUp);
   };
 
-  // Suppress unused variable warning - zoom is used via getState() inside callbacks
-  void zoom;
+  // ── Resize: touch ─────────────────────────────────────────────────────────────
+  const handleResizeTouchStart = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    resizeRef.current = { startX: t.clientX, startY: t.clientY, startW: note.width, startH: note.height };
+    const currentZoom = useUIStore.getState().zoom;
+    const onMove = (me: TouchEvent) => {
+      me.preventDefault();
+      if (!resizeRef.current || me.touches.length !== 1) return;
+      const touch = me.touches[0];
+      updateStickyNote(note.id, {
+        width: Math.max(120, resizeRef.current.startW + (touch.clientX - resizeRef.current.startX) / currentZoom),
+        height: Math.max(80, resizeRef.current.startH + (touch.clientY - resizeRef.current.startY) / currentZoom),
+      });
+    };
+    const onEnd = () => {
+      resizeRef.current = null;
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+  };
 
   return (
     <div
       className="sticky-note"
       style={{
-        position: 'absolute',  // CRITICAL: must be absolute to use left/top in world coords
+        position: 'absolute',
         left: note.x,
         top: note.y,
         width: note.width,
@@ -138,12 +110,13 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
         border: '1px solid rgba(0,0,0,0.06)',
         userSelect: 'none',
       }}
-      onMouseDown={handleMouseDown}
-      onTouchStart={handleTouchStart}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
       onDoubleClick={e => e.stopPropagation()}
       onClick={e => e.stopPropagation()}
     >
-      {/* Header drag bar — dragging propagates to outer onMouseDown */}
+      {/* Header */}
       <div
         className="sticky-controls"
         style={{
@@ -155,7 +128,7 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setShowColors(!showColors)}
-            onMouseDown={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', fontSize: 12, color: '#636E72', display: 'flex', alignItems: 'center', gap: 3 }}
             title="Change color"
           >
@@ -170,7 +143,7 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
                 padding: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
                 display: 'flex', gap: 4,
               }}
-              onMouseDown={e => e.stopPropagation()}
+              onPointerDown={e => e.stopPropagation()}
             >
               {STICKY_COLORS.map(c => (
                 <button
@@ -184,19 +157,19 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
         </div>
         <button
           onClick={() => deleteStickyNote(note.id)}
-          onMouseDown={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', fontSize: 14, color: '#636E72', lineHeight: 1 }}
           title="Delete"
         >×</button>
       </div>
 
-      {/* Text area */}
+      {/* Text area — stopPropagation so clicks don't trigger drag */}
       <textarea
         value={note.text}
         onChange={(e) => updateStickyNote(note.id, { text: e.target.value })}
         onClick={e => e.stopPropagation()}
         onDoubleClick={e => e.stopPropagation()}
-        onMouseDown={e => e.stopPropagation()}
+        onPointerDown={e => e.stopPropagation()}
         placeholder="Type your note..."
         style={{
           flex: 1, background: 'none', border: 'none', outline: 'none',
@@ -205,7 +178,7 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
         }}
       />
 
-      {/* Resize handle */}
+      {/* Resize handle — bottom-right only */}
       <div
         className="sticky-resize"
         onMouseDown={handleResizeMouseDown}

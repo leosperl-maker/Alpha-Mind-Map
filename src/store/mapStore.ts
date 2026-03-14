@@ -139,6 +139,7 @@ export interface MapState {
   updateNodeMedia: (nodeId: string, media: NodeMedia | null) => void;
   toggleNodeStar: (nodeId: string) => void;
   updateNodePosition: (nodeId: string, x: number, y: number) => void;
+  batchUpdateNodePositions: (updates: Array<{ id: string; x: number; y: number }>) => void;
   setNodeSide: (nodeId: string, side: 'left' | 'right') => void;
   toggleCollapse: (nodeId: string) => void;
   moveNode: (nodeId: string, newParentId: string) => void;
@@ -531,6 +532,24 @@ export const useMapStore = create<MapState>((set, get) => ({
             [nodeId]: { ...node, position: { ...node.position, x, y, manuallyPositioned: true } },
           },
         };
+      }),
+    }));
+  },
+
+  batchUpdateNodePositions: (updates) => {
+    const id = get().activeMapId;
+    if (!id) return;
+    set(s => ({
+      maps: s.maps.map(m => {
+        if (m.id !== id) return m;
+        const newNodes = { ...m.nodes };
+        updates.forEach(({ id: nodeId, x, y }) => {
+          const node = newNodes[nodeId];
+          if (node) {
+            newNodes[nodeId] = { ...node, position: { ...node.position, x, y, manuallyPositioned: true } };
+          }
+        });
+        return { ...m, nodes: newNodes };
       }),
     }));
   },

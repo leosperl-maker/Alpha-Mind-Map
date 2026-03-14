@@ -6,6 +6,7 @@ import { Connector } from './Connector';
 import { StickyNote } from './StickyNote';
 import { Minimap } from './Minimap';
 import { CrossConnectorLayer } from './CrossConnectorLayer';
+import { getNodeDimensions } from '../../utils/layout';
 import type { MindMapNode, NodeMedia } from '../../types';
 
 function getNodeDepth(nodeId: string, nodes: Record<string, MindMapNode>): number {
@@ -63,6 +64,7 @@ export const MindMapCanvas: React.FC = () => {
   const addSiblingNode = useMapStore(s => s.addSiblingNode);
   const deleteNode = useMapStore(s => s.deleteNode);
   const moveNode = useMapStore(s => s.moveNode);
+  const batchUpdateNodePositions = useMapStore(s => s.batchUpdateNodePositions);
   const updateNodePosition = useMapStore(s => s.updateNodePosition);
   const updateNodeMedia = useMapStore(s => s.updateNodeMedia);
   const addCrossConnector = useMapStore(s => s.addCrossConnector);
@@ -91,10 +93,12 @@ export const MindMapCanvas: React.FC = () => {
     startWorldX: number;
     startWorldY: number;
     dragged: boolean;
+    subtreeStartPositions: Map<string, { x: number; y: number }>;
   } | null>(null);
 
   const touchStartRef = useRef<{ x: number; y: number; time: number; dist: number } | null>(null);
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const isCreatingStickyNoteRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchPanRef = useRef<{ panX: number; panY: number; x: number; y: number } | null>(null);
   const pinchRef = useRef<{ dist: number; zoom: number; midX: number; midY: number } | null>(null);
@@ -182,7 +186,13 @@ export const MindMapCanvas: React.FC = () => {
       const dy = e.clientY - dr.startClientY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
         dr.dragged = true;
-        updateNodePosition(dr.nodeId, dr.startWorldX + dx / zoom, dr.startWorldY + dy / zoom);
+        const dxWorld = dx / zoom;
+        const dyWorld = dy / zoom;
+        const updates: Array<{ id: string; x: number; y: number }> = [];
+        dr.subtreeStartPositions.forEach(({ x, y }, id) => {
+          updates.push({ id, x: x + dxWorld, y: y + dyWorld });
+        });
+        batchUpdateNodePositions(updates);
       }
       return;
     }
@@ -192,7 +202,7 @@ export const MindMapCanvas: React.FC = () => {
       const dy = e.clientY - panStart.current.y;
       setPan(panStart.current.panX + dx, panStart.current.panY + dy);
     }
-  }, [setPan, zoom, updateNodePosition]);
+  }, [setPan, zoom, batchUpdateNodePositions]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     if (isPanning.current) {
@@ -273,12 +283,39 @@ export const MindMapCanvas: React.FC = () => {
     setTimeout(() => setEditingNode(newId), 50);
   }, [addNodeOnSide, setSelectedNode, setEditingNode]);
 
+  const handleAddChildTop = useCallback((nodeId: string) => {
+    if (!map) return;
+    const parent = map.nodes[nodeId];
+    if (!parent) return;
+    const dims = getNodeDimensions(parent);
+    const newId = addNode(nodeId);
+    updateNodePosition(newId, parent.position.x, parent.position.y - dims.h - 60);
+    setSelectedNode(newId);
+    setTimeout(() => setEditingNode(newId), 50);
+  }, [map, addNode, updateNodePosition, setSelectedNode, setEditingNode]);
+
+  const handleAddChildBottom = useCallback((nodeId: string) => {
+    if (!map) return;
+    const parent = map.nodes[nodeId];
+    if (!parent) return;
+    const dims = getNodeDimensions(parent);
+    const newId = addNode(nodeId);
+    updateNodePosition(newId, parent.position.x, parent.position.y + dims.h + 60);
+    setSelectedNode(newId);
+    setTimeout(() => setEditingNode(newId), 50);
+  }, [map, addNode, updateNodePosition, setSelectedNode, setEditingNode]);
+
   const handleNodeDragStart = useCallback((nodeId: string, e: React.MouseEvent) => {
     if (!map) return;
     const node = map.nodes[nodeId];
     if (!node) return;
     isPanning.current = false;
     setIsPanningActive(false);
+    const subtreeStartPositions = new Map<string, { x: number; y: number }>();
+    collectSubtreeIds(nodeId, map.nodes).forEach(id => {
+      const n = map.nodes[id];
+      if (n) subtreeStartPositions.set(id, { x: n.position.x, y: n.position.y });
+    });
     nodeDragRef.current = {
       nodeId,
       startClientX: e.clientX,
@@ -286,6 +323,7 @@ export const MindMapCanvas: React.FC = () => {
       startWorldX: node.position.x,
       startWorldY: node.position.y,
       dragged: false,
+      subtreeStartPositions,
     };
   }, [map]);
 
@@ -309,6 +347,11 @@ export const MindMapCanvas: React.FC = () => {
         isPanning.current = false;
         touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now(), dist: 0 };
         touchPanRef.current = null;
+        const subtreeStartPositions = new Map<string, { x: number; y: number }>();
+        collectSubtreeIds(nodeId, map.nodes).forEach(id => {
+          const n = map.nodes[id];
+          if (n) subtreeStartPositions.set(id, { x: n.position.x, y: n.position.y });
+        });
         nodeDragRef.current = {
           nodeId,
           startClientX: t.clientX,
@@ -316,6 +359,7 @@ export const MindMapCanvas: React.FC = () => {
           startWorldX: node.position.x,
           startWorldY: node.position.y,
           dragged: false,
+          subtreeStartPositions,
         };
         return;
       }
@@ -358,7 +402,13 @@ export const MindMapCanvas: React.FC = () => {
       const dy = t.clientY - dr.startClientY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
         dr.dragged = true;
-        updateNodePosition(dr.nodeId, dr.startWorldX + dx / zoom, dr.startWorldY + dy / zoom);
+        const dxWorld = dx / zoom;
+        const dyWorld = dy / zoom;
+        const updates: Array<{ id: string; x: number; y: number }> = [];
+        dr.subtreeStartPositions.forEach(({ x, y }, id) => {
+          updates.push({ id, x: x + dxWorld, y: y + dyWorld });
+        });
+        batchUpdateNodePositions(updates);
       }
       return;
     }
@@ -377,7 +427,7 @@ export const MindMapCanvas: React.FC = () => {
       setZoom(newZoom);
       setPan(midX - (midX - panX) * (newZoom / zoom), midY - (midY - panY) * (newZoom / zoom));
     }
-  }, [panX, panY, zoom, setPan, setZoom, updateNodePosition]);
+  }, [panX, panY, zoom, setPan, setZoom, batchUpdateNodePositions]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null; }
@@ -423,10 +473,14 @@ export const MindMapCanvas: React.FC = () => {
           const tapDt = Date.now() - lastTapRef.current.time;
           const tapDist = Math.sqrt(Math.pow(t.clientX - lastTapRef.current.x, 2) + Math.pow(t.clientY - lastTapRef.current.y, 2));
           if (tapDt < 300 && tapDist < 30) {
-            const rect = containerRef.current!.getBoundingClientRect();
-            const wx = (t.clientX - rect.left - panX) / zoom;
-            const wy = (t.clientY - rect.top - panY) / zoom;
-            addStickyNote(wx, wy);
+            if (!isCreatingStickyNoteRef.current) {
+              isCreatingStickyNoteRef.current = true;
+              const rect = containerRef.current!.getBoundingClientRect();
+              const wx = (t.clientX - rect.left - panX) / zoom;
+              const wy = (t.clientY - rect.top - panY) / zoom;
+              addStickyNote(wx, wy);
+              setTimeout(() => { isCreatingStickyNoteRef.current = false; }, 300);
+            }
             lastTapRef.current = null; touchStartRef.current = null;
             return;
           }
@@ -603,7 +657,9 @@ export const MindMapCanvas: React.FC = () => {
             onSelect={handleNodeSelect}
             onDoubleClick={handleNodeDoubleClick}
             onAddChild={handleAddChild}
-            onAddChildLeft={rootIds.includes(node.id) ? handleAddChildLeft : undefined}
+            onAddChildLeft={handleAddChildLeft}
+            onAddChildTop={handleAddChildTop}
+            onAddChildBottom={handleAddChildBottom}
             onDragStart={handleNodeDragStart}
             onContextMenu={handleContextMenu}
           />
@@ -611,7 +667,7 @@ export const MindMapCanvas: React.FC = () => {
       </div>
 
       {/* Zoom controls */}
-      <div style={{ position: 'absolute', bottom: 16, left: 16, display: 'flex', flexDirection: 'column', gap: 4, zIndex: 20 }}>
+      <div style={{ position: 'absolute', bottom: 80, left: 16, display: 'flex', flexDirection: 'column', gap: 4, zIndex: 20 }}>
         <button onClick={() => setZoom(Math.min(3, zoom * 1.2))} style={zoomBtnStyle} title="Zoom in" aria-label="Zoom in">+</button>
         <button onClick={() => setZoom(Math.max(0.2, zoom * 0.8))} style={zoomBtnStyle} title="Zoom out" aria-label="Zoom out">−</button>
         <button
@@ -648,7 +704,7 @@ export const MindMapCanvas: React.FC = () => {
 
       {/* Minimap */}
       {showMinimap && !pendingCrossConnect && (
-        <div style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 20 }}>
+        <div style={{ position: 'absolute', bottom: 80, right: 16, zIndex: 20 }}>
           <Minimap map={map} canvasW={dims.w} canvasH={dims.h} zoom={zoom} panX={panX} panY={panY} />
         </div>
       )}
