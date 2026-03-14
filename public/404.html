@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script>
+    // Redirige toutes les 404 vers index.html pour le routing React
+    var path = window.location.pathname;
+    var search = window.location.search;
+    var hash = window.location.hash;
+    window.location.replace(
+      window.location.origin + '/Alpha-Mind-Map/' + 
+      '?redirect=' + encodeURIComponent(path + search + hash)
+    );
+  </script>
+</head>
+<body></body>
+</html>
