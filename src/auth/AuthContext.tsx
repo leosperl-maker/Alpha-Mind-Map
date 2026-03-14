@@ -51,19 +51,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Real Supabase session
-    supabase!.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email!,
-          fullName: session.user.user_metadata?.full_name ?? session.user.email!.split('@')[0],
-          avatarUrl: session.user.user_metadata?.avatar_url,
-        });
-      }
-      setLoading(false);
-    });
-
+    // Use onAuthStateChange as the single source of truth.
+    // Supabase v2 always fires INITIAL_SESSION first (after processing any
+    // OAuth hash fragment in the URL), so this correctly handles the Google
+    // OAuth redirect without a getSession() race condition where loading=false
+    // is set before the hash token is parsed.
     const { data: { subscription } } = supabase!.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser({
@@ -75,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setUser(null);
       }
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
