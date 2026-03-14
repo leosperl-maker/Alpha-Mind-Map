@@ -299,6 +299,7 @@ export const DashboardPage: React.FC = () => {
               background: '#fff', borderRadius: '16px 16px 0 0',
               maxHeight: '85vh', display: 'flex', flexDirection: 'column',
               boxShadow: '0 -4px 32px rgba(0,0,0,0.18)',
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             }}
             onClick={e => e.stopPropagation()}
           >

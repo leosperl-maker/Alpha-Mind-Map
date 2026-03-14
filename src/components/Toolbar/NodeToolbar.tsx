@@ -556,6 +556,7 @@ export const NodeToolbar: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           padding: '6px 8px',
+          paddingBottom: 'calc(6px + env(safe-area-inset-bottom, 0px))',
           gap: 4,
           zIndex: 40,
           flexWrap: 'nowrap',

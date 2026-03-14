@@ -667,7 +667,7 @@ export const MindMapCanvas: React.FC = () => {
       </div>
 
       {/* Zoom controls */}
-      <div style={{ position: 'absolute', bottom: 16, left: 16, display: 'flex', flexDirection: 'column', gap: 4, zIndex: 20 }}>
+      <div style={{ position: 'absolute', bottom: 80, left: 16, display: 'flex', flexDirection: 'column', gap: 4, zIndex: 20 }}>
         <button onClick={() => setZoom(Math.min(3, zoom * 1.2))} style={zoomBtnStyle} title="Zoom in" aria-label="Zoom in">+</button>
         <button onClick={() => setZoom(Math.max(0.2, zoom * 0.8))} style={zoomBtnStyle} title="Zoom out" aria-label="Zoom out">−</button>
         <button
@@ -704,7 +704,7 @@ export const MindMapCanvas: React.FC = () => {
 
       {/* Minimap */}
       {showMinimap && !pendingCrossConnect && (
-        <div style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 20 }}>
+        <div style={{ position: 'absolute', bottom: 80, right: 16, zIndex: 20 }}>
           <Minimap map={map} canvasW={dims.w} canvasH={dims.h} zoom={zoom} panX={panX} panY={panY} />
         </div>
       )}

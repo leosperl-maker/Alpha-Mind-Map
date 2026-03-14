@@ -48,6 +48,7 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({ open, onClose, childre
           boxShadow: '0 -4px 32px rgba(0,0,0,0.18)',
           transform: 'translateY(0)',
           transition: 'transform 250ms ease',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
         onClick={e => e.stopPropagation()}
       >
