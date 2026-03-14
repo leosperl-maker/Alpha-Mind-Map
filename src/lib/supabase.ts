@@ -1,14 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config';
 
 /** True when no real Supabase project is configured — all auth/DB ops run locally */
-export const isMockMode =
-  !supabaseUrl ||
-  supabaseUrl === 'https://placeholder.supabase.co' ||
-  supabaseUrl.includes('placeholder');
+export const isMockMode = !SUPABASE_URL || !SUPABASE_ANON_KEY;
 
 export const supabase = isMockMode
   ? null
-  : createClient(supabaseUrl, supabaseAnonKey);
+  : createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
