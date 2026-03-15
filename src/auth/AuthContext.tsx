@@ -51,19 +51,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Real Supabase session
-    supabase!.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email!,
-          fullName: session.user.user_metadata?.full_name ?? session.user.email!.split('@')[0],
-          avatarUrl: session.user.user_metadata?.avatar_url,
-        });
-      }
-      setLoading(false);
-    });
-
+    // Use onAuthStateChange exclusively to avoid race condition with OAuth hash processing.
+    // Supabase v2 calls this immediately once with the current/initial session state,
+    // so it correctly handles both normal page loads and OAuth redirects.
     const { data: { subscription } } = supabase!.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser({
@@ -75,6 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setUser(null);
       }
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -119,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     const { error } = await supabase!.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin + '/Alpha-Mind-Map/dashboard' },
+      options: { redirectTo: window.location.origin + '/Alpha-Mind-Map/' },
     });
     return { error: error?.message ?? null };
   }, []);

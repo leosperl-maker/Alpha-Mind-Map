@@ -17,11 +17,7 @@
       (function() {
         var p = new URLSearchParams(window.location.search).get('p');
         if (p) {
-          var base = '/Alpha-Mind-Map';
-          window.history.replaceState(
-            null, '',
-            base + decodeURIComponent(p) + window.location.hash
-          );
+          window.history.replaceState(null, '', decodeURIComponent(p));
         }
       })();
     </script>
