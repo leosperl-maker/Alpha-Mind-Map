@@ -6,10 +6,15 @@ import { AppLogo } from '../components/common/AppLogo';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 
 export const LoginPage: React.FC = () => {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { user, loading: authLoading, signIn, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/dashboard';
+
+  // Redirect already-authenticated users (e.g. after Google OAuth callback)
+  useEffect(() => {
+    if (!authLoading && user) navigate('/dashboard', { replace: true });
+  }, [user, authLoading, navigate]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
