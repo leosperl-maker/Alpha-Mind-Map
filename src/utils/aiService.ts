@@ -3,6 +3,12 @@ import { callGemini, DEFAULT_GEMINI_MODEL } from '../lib/gemini';
 
 const AI_SETTINGS_KEY = 'alpha-mind-map-ai-settings-v2';
 
+// Deprecated model names that must be migrated to DEFAULT_GEMINI_MODEL
+const DEPRECATED_MODELS = [
+  'gemini-2.5-flash-preview-05-20',
+  'gemini-2.5-flash-preview',
+];
+
 export interface AISettings {
   geminiApiKey: string;   // optional — empty = use shared VITE_GEMINI_API_KEY
   enabled: boolean;
@@ -15,11 +21,13 @@ export function getAISettings(): AISettings {
     const raw = localStorage.getItem(AI_SETTINGS_KEY);
     if (!raw) return { geminiApiKey: '', enabled: true, language: 'fr', model: DEFAULT_GEMINI_MODEL };
     const parsed = JSON.parse(raw) as Partial<AISettings>;
+    const storedModel = parsed.model ?? DEFAULT_GEMINI_MODEL;
+    const model = DEPRECATED_MODELS.includes(storedModel) ? DEFAULT_GEMINI_MODEL : storedModel;
     return {
       geminiApiKey: parsed.geminiApiKey ?? '',
       enabled: parsed.enabled ?? true,
       language: parsed.language ?? 'fr',
-      model: parsed.model ?? DEFAULT_GEMINI_MODEL,
+      model,
     };
   } catch {
     return { geminiApiKey: '', enabled: true, language: 'fr', model: DEFAULT_GEMINI_MODEL };
