@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { isMockMode } from '../lib/supabase';
@@ -6,10 +6,15 @@ import { AppLogo } from '../components/common/AppLogo';
 import { useBreakpoint } from '../hooks/useBreakpoint';
 
 export const LoginPage: React.FC = () => {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { user, loading: authLoading, signIn, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/dashboard';
+
+  // Redirect already-authenticated users (e.g. after Google OAuth callback)
+  useEffect(() => {
+    if (!authLoading && user) navigate('/dashboard', { replace: true });
+  }, [user, authLoading, navigate]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,8 +35,9 @@ export const LoginPage: React.FC = () => {
   const handleGoogle = async () => {
     setError('');
     const { error: err } = await signInWithGoogle();
-    if (err) { setError(err); return; }
-    navigate(from, { replace: true });
+    if (err) setError(err);
+    // signInWithOAuth triggers a full browser redirect to Google — no navigate() needed here.
+    // After the OAuth callback, AuthContext sets user and RootRedirect navigates to /dashboard.
   };
 
   return (
