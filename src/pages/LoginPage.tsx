@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { isMockMode } from '../lib/supabase';
@@ -35,8 +35,9 @@ export const LoginPage: React.FC = () => {
   const handleGoogle = async () => {
     setError('');
     const { error: err } = await signInWithGoogle();
-    if (err) { setError(err); return; }
-    navigate(from, { replace: true });
+    if (err) setError(err);
+    // signInWithOAuth triggers a full browser redirect to Google — no navigate() needed here.
+    // After the OAuth callback, AuthContext sets user and RootRedirect navigates to /dashboard.
   };
 
   return (
