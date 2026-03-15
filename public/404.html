@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Alpha Mind Map</title>
+  <script>
+    // GitHub Pages SPA redirect.
+    // GitHub Pages serves this 404.html for any unknown path (e.g.
+    // /Alpha-Mind-Map/dashboard). We encode the full path + query string
+    // as a ?p= parameter and redirect to the SPA root so index.html can
+    // restore the URL with history.replaceState before React boots.
+    // The hash fragment (#access_token=... or any other) is preserved
+    // automatically by the browser when following the redirect.
+    (function() {
+      var l = window.location;
+      var base = '/Alpha-Mind-Map';
+      var pathAfterBase = l.pathname.slice(base.length) || '/';
+      var search = l.search ? l.search.slice(1) : '';
+      var encoded = encodeURIComponent(pathAfterBase + (search ? '?' + search : ''));
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        base + '/?p=' + encoded + l.hash
+      );
+    })();
+  </script>
+</head>
+<body></body>
+</html>

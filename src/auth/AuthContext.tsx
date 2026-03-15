@@ -51,12 +51,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Use onAuthStateChange as the single source of truth.
-    // Supabase v2 always fires INITIAL_SESSION first (after processing any
-    // OAuth hash fragment in the URL), so this correctly handles the Google
-    // OAuth redirect without a getSession() race condition where loading=false
-    // is set before the hash token is parsed.
-    const { data: { subscription } } = supabase!.auth.onAuthStateChange((_event, session) => {
+    // Detect an in-progress PKCE exchange: Supabase v2 uses ?code= in the
+    // query string (not #access_token= in the hash). If the code is present,
+    // Supabase is still exchanging it for a session — we must NOT unblock
+    // loading on the first INITIAL_SESSION event (which fires with null
+    // before the exchange completes). We wait for the subsequent SIGNED_IN.
+    const hasPkceCode = new URLSearchParams(window.location.search).has('code');
+
+    const { data: { subscription } } = supabase!.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         setUser({
           id: session.user.id,
@@ -64,13 +66,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           fullName: session.user.user_metadata?.full_name ?? session.user.email!.split('@')[0],
           avatarUrl: session.user.user_metadata?.avatar_url,
         });
+        setLoading(false);
+      } else if (event === 'INITIAL_SESSION' && hasPkceCode) {
+        // PKCE exchange in progress – keep spinner until SIGNED_IN fires
       } else {
         setUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    // Safety fallback: unblock after 10 s if the PKCE exchange stalls
+    const timeout = hasPkceCode
+      ? setTimeout(() => setLoading(false), 10_000)
+      : null;
+
+    return () => {
+      subscription.unsubscribe();
+      if (timeout) clearTimeout(timeout);
+    };
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, fullName: string) => {
@@ -112,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     const { error } = await supabase!.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin + '/Alpha-Mind-Map/dashboard' },
+      options: { redirectTo: window.location.origin + '/Alpha-Mind-Map/' },
     });
     return { error: error?.message ?? null };
   }, []);
